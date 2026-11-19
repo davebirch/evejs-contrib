@@ -20,7 +20,7 @@ const iso = (ms) => new Date(ms).toISOString();
 const jsonl = (rows) => rows.map((r) => JSON.stringify(r)).join('\n') + '\n';
 const stamp = (ms) => iso(ms).replace(/[:.]/g, '-');
 const r2 = (x) => Math.round(x * 100) / 100;
-const FRAME_URL = 'file:///home/sam/evejs/server/src/space/tick.js';
+const FRAME_URL = 'file:///C:/Users/Sam/EveJS/server/src/space/tick.js';
 
 // Deterministic PRNG (mulberry32), so the fixture is the same on every machine.
 function rng(seed) {
