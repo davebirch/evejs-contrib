@@ -649,3 +649,23 @@ test('check --post checks the post too', () => {
   assert.equal(r.status, 2);
   assert.match(r.stdout, /refusing: draft\.md: line \d+: link into the zip/);
 });
+
+test('zip: --post may come anywhere among the options, after --terms included', () => {
+  const { d, b } = goodBundle();
+  const post = path.join(d, 'draft.md');
+  fs.writeFileSync(post, POST);
+  put(d, 'terms', 'gizmo\n');
+  const out = path.join(d, 'out', 'r.zip');
+  const r = runNoId('zip', b, out, '--terms', path.join(d, 'terms'), '--post', post);
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.equal(get(d, 'out/r.post.md'), POST);
+  // the terms file applies to the post as well
+  fs.writeFileSync(post, `${POST}A gizmo broke.\n`);
+  const r2 = runNoId('zip', b, path.join(d, 'out2', 'r.zip'), '--terms', path.join(d, 'terms'), '--post', post);
+  assert.equal(r2.status, 2);
+  assert.match(r2.stdout, /refusing: leak: draft\.md:\d+: gizmo/);
+  assert.ok(!fs.existsSync(path.join(d, 'out2')) || fs.readdirSync(path.join(d, 'out2')).length === 0);
+  const r3 = runNoId('zip', '--post', post, b, path.join(d, 'out3', 'r.zip'), '--allow', 'gizmo', '--terms', path.join(d, 'terms'));
+  assert.equal(r3.status, 0, r3.stdout + r3.stderr);
+  assert.ok(fs.existsSync(path.join(d, 'out3', 'r.post.md')));
+});
