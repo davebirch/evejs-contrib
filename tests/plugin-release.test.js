@@ -27,7 +27,7 @@ if (process.env.FAKE_FAIL === '${name}' && args[0] !== '--version') { console.er
 
 // A throwaway repo on main with a local bare repo as its remote, plus the fakes.
 function setup() {
-  const base = tmp();
+  const base = fs.realpathSync(tmp());
   const repo = path.join(base, 'repo');
   fs.mkdirSync(repo);
   for (const f of ['.claude-plugin', 'scripts', 'skills', 'LICENSE', 'README.md', 'package.json', '.gitignore']) {
