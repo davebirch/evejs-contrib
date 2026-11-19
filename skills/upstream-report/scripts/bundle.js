@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 'use strict';
-// Builds a report bundle: init, validate, add-report, add-profiles, manifest, check, zip.
+// Builds a report bundle: init, validate, add-report, add-profiles, manifest, check, check-post, zip.
+// The post is the condensed Discord text that travels beside the zip (zip --post writes it there).
 // Reads upstream's error-report zip (its output only; never runs the collector).
 // Exit 0 ok, 2 refused (one "refusing: ..." line per problem), 64 usage.
 const fs = require('node:fs');
@@ -22,7 +23,12 @@ const TOP_DOCS = ['README.md', 'BUG-REPORT.md', 'DEVELOPER-HANDOFF.md'];
 const MANIFEST = 'manifest-sha256.txt';
 const JUNK = new Set(['.DS_Store', 'Thumbs.db']);
 const SKELETON = path.join(__dirname, '..', 'assets', 'skeleton');
-const VALUE_OPTS = new Set(['--area', '--version', '--repo', '--base', '--as', '--names', '--hosts']);
+const VALUE_OPTS = new Set(['--area', '--version', '--repo', '--base', '--as', '--names', '--hosts', '--post']);
+// One Discord message is at most 2,000 characters; a post part keeps 100 of headroom.
+const POST_LIMIT = 1900;
+const POST_MARKER = /^--- part (\d+)\/(\d+) ---$/;
+const TABLE_BLOCK_LINES = 8; // a header, its separator and six rows
+const TABLE_BLOCK_WIDTH = 60;
 
 class Usage extends Error {}
 class Refused extends Error {
@@ -438,6 +444,116 @@ function check(dir, { terms, identity, names = [], hosts = [], allow = [], allow
   return problems;
 }
 
+// ---------------------------------------------------------------- the Discord post
+
+const isTableLine = (l) => /^\s*\|.*\|/.test(l) || /^\s*\|?\s*:?-{3,}:?\s*(?:\|\s*:?-{3,}:?\s*)+\|?\s*$/.test(l);
+const chars = (s) => [...s].length; // code points, not bytes or UTF-16 units
+
+// Problems with a post (its text, any line endings): size per part (trimmed, as Discord sends it), part
+// markers, tables outside code blocks, oversized tables inside them, links into the zip, images, and the
+// same leak scan as check. A second part starts at a line that is exactly "--- part n/m ---"; the first
+// part may carry "--- part 1/m ---" on its first line. Each problem starts with the post's name.
+function checkPost(text, { name = 'post', terms = { terms: [], names: [], identity: [] }, identity = [], names = [], hosts = [], allow = [] } = {}) {
+  const problems = [];
+  const say = (msg) => problems.push(`${name}: ${msg}`);
+  const t = stripBom(text).replace(/\r\n/g, '\n');
+  const lines = t.split('\n');
+  const fenced = new Array(lines.length).fill(false); // the line is inside a code block or is its fence
+  const parts = [[]], markers = [];
+  let fence = null, block = null;
+  const closeBlock = () => {
+    if (block && block.table) {
+      if (block.lines.length > TABLE_BLOCK_LINES) say(`line ${block.start}: code block with a table is ${block.lines.length} lines (limit ${TABLE_BLOCK_LINES}): keep the headline rows`);
+      if (block.lines.some((l) => chars(l) > TABLE_BLOCK_WIDTH)) say(`line ${block.start}: code block with a table is wider than ${TABLE_BLOCK_WIDTH} characters`);
+    }
+    block = null;
+  };
+  let firstText = lines.findIndex((l) => l.trim());
+  lines.forEach((line, i) => {
+    const n = i + 1;
+    const f = /^ {0,3}(`{3,}|~{3,})/.exec(line);
+    if (fence) {
+      fenced[i] = true;
+      if (f && f[1][0] === fence[0] && f[1].length >= fence.length && !line.slice(f[0].length).trim()) { fence = null; closeBlock(); }
+      else { block.lines.push(line); if (isTableLine(line)) block.table = true; }
+      parts[parts.length - 1].push(line);
+      return;
+    }
+    if (f) {
+      fenced[i] = true;
+      fence = f[1];
+      block = { start: n, lines: [], table: false };
+      parts[parts.length - 1].push(line);
+      return;
+    }
+    const m = POST_MARKER.exec(line);
+    if (m) {
+      markers.push({ n, part: Number(m[1]), of: Number(m[2]), first: i === firstText });
+      if (i !== firstText) parts.push([]);
+      return;
+    }
+    if (/^\s*-{2,}\s*part\b/i.test(line)) say(`line ${n}: malformed part marker (write exactly "--- part n/m ---")`);
+    parts[parts.length - 1].push(line);
+  });
+  if (fence) { say(`line ${block.start}: unclosed code block`); block = null; }
+
+  const texts = parts.map((p) => p.join('\n').trim());
+  if (texts.length === 1 && !texts[0]) say('the post is empty');
+  else {
+    texts.forEach((p, i) => {
+      const what = texts.length === 1 ? 'the post' : `part ${i + 1}`;
+      if (!p) say(`${what} is empty`);
+      else if (chars(p) > POST_LIMIT) say(`${what} is ${chars(p)} characters (limit ${POST_LIMIT}): condense it${texts.length === 1 ? ', or split it with a "--- part 2/2 ---" line only if the essentials cannot fit' : ''}`);
+    });
+    for (const k of markers) {
+      const label = `"--- part ${k.part}/${k.of} ---"`;
+      const want = k.first ? 1 : 1 + markers.filter((x) => !x.first && x.n <= k.n).length;
+      if (k.of !== texts.length) say(`line ${k.n}: marker ${label} says part ${k.part}/${k.of}, but the post has ${texts.length} parts`);
+      else if (k.part !== want) say(`line ${k.n}: marker ${label} should be part ${want}/${texts.length}`);
+      if (k.of < 2) say(`line ${k.n}: a post in one part has no part marker`);
+    }
+  }
+
+  let tableAt = 0;
+  lines.forEach((line, i) => {
+    const n = i + 1;
+    if (fenced[i]) { tableAt = 0; return; }
+    if (isTableLine(line)) {
+      if (!tableAt) say(`line ${n}: table outside a code block (Discord shows the pipes): use a list, or a small table in a code block`);
+      tableAt = n;
+    } else tableAt = 0;
+    const prose = line.replace(/`[^`\n]*`/g, '');
+    if (/!\[[^\]]*\][([]/.test(prose)) say(`line ${n}: image: a post has no images (they stay in the zip)`);
+    const ref = /^ {0,3}\[[^\]]+\]:\s*<?([^\s>]+)>?/.exec(prose);
+    for (const raw of [...linkTargets(prose), ...(ref ? [ref[1]] : [])]) {
+      if (localTarget(raw) !== null) say(`line ${n}: link into the zip: ${raw} (the reader has no such link: name the file in \`code\` instead)`);
+    }
+  });
+
+  try {
+    const hits = scanTexts([{ name: `post/${name}`, text: t }], { terms: terms.terms, names: [...terms.names, ...names], hosts, identity: [...identity, ...terms.identity], allow });
+    for (const h of hits) problems.push(`leak: ${name}:${h.line}: ${h.term}`);
+  } catch (e) {
+    say(`leak scan: ${e.message}`);
+  }
+  return problems;
+}
+
+// The post file named by --post (or a check-post argument): its bytes and its checked problems.
+function readPost(file, opts, dir) {
+  if (!exists(file) || !fs.statSync(file).isFile()) usage(`no such file: ${file}`);
+  const abs = path.resolve(file);
+  const name = path.basename(abs);
+  if (dir) {
+    const rel = path.relative(dir, abs);
+    if (!rel.startsWith('..') && !path.isAbsolute(rel)) return { abs, problems: [`${name}: the post must be outside the bundle folder (it would ship inside the zip)`] };
+  }
+  const bytes = fs.readFileSync(abs);
+  const d = decodeText(bytes);
+  if (!d) return { abs, bytes, problems: [`${name}: not readable as text`] };
+  return { abs, bytes, problems: checkPost(d.text, { ...opts, name }) };
+}
+
 function checkOpts(opt, flags) {
   const terms = loadTerms(opt, flags);
   if (terms.missingDefault) console.error('no leak-terms file: run leak-terms init');
@@ -452,40 +568,63 @@ function checkOpts(opt, flags) {
   };
 }
 
+const TERM_USAGE = '[--terms <file>]... [--no-user-terms] [--no-identity] [--names <file>] [--hosts <file>] [--allow <label|term>]...';
+
 function runCheck({ pos, opt, flags }) {
-  if (pos.length !== 1) usage('usage: bundle.js check <dir> [--terms <file>]... [--no-user-terms] [--no-identity] [--names <file>] [--hosts <file>] [--allow <label|term>]... [--allow-binary <name>]...');
+  if (pos.length !== 1) usage(`usage: bundle.js check <dir> [--post <post.md>] ${TERM_USAGE} [--allow-binary <name>]...`);
   const dir = path.resolve(pos[0]);
   if (!exists(dir)) usage(`no such folder: ${pos[0]}`);
-  const problems = check(dir, checkOpts(opt, flags));
+  if (opt.post && !exists(opt.post)) usage(`no such file: ${opt.post}`);
+  const opts = checkOpts(opt, flags);
+  const problems = check(dir, opts);
+  if (opt.post) problems.push(...readPost(opt.post, opts, dir).problems);
   if (problems.length) throw new Refused(problems);
-  console.log('check passed');
+  console.log(opt.post ? 'check passed (bundle and post)' : 'check passed');
+}
+
+function runCheckPost({ pos, opt, flags }) {
+  if (pos.length !== 1) usage(`usage: bundle.js check-post <post.md> ${TERM_USAGE}`);
+  if (!exists(pos[0])) usage(`no such file: ${pos[0]}`);
+  const { problems } = readPost(pos[0], checkOpts(opt, flags));
+  if (problems.length) throw new Refused(problems);
+  console.log('post check passed');
 }
 
 function zip({ pos, opt, flags }) {
-  if (pos.length !== 2) usage('usage: bundle.js zip <dir> <out.zip> [--terms <file>]... [--no-user-terms] [--no-identity] [--names <file>] [--hosts <file>] [--allow <label|term>]... [--allow-binary <name>]...');
+  if (pos.length !== 2) usage(`usage: bundle.js zip <dir> <out.zip> [--post <post.md>] ${TERM_USAGE} [--allow-binary <name>]...`);
   const dir = path.resolve(pos[0]);
   if (!exists(dir)) usage(`no such folder: ${pos[0]}`);
+  if (opt.post && !exists(opt.post)) usage(`no such file: ${opt.post}`);
   const out = path.resolve(pos[1]);
   const top = path.basename(out).replace(/\.zip$/i, '');
   if (!top) usage('out must be a file name ending .zip');
-  const problems = check(dir, checkOpts(opt, flags));
+  const opts = checkOpts(opt, flags);
+  const problems = check(dir, opts);
+  const post = opt.post ? readPost(opt.post, opts, dir) : null;
+  if (post) problems.push(...post.problems);
   if (problems.length) throw new Refused(problems);
   const { files } = listFiles(dir);
   const entries = files.map((f) => ({ name: `${top}/${f}`, data: fs.readFileSync(path.join(dir, ...f.split('/'))) }));
+  // the post sits beside the zip as <zip name minus .zip>.post.md, byte for byte, never inside it
+  const postOut = post ? `${out.replace(/\.zip$/i, '')}.post.md` : null;
   fs.mkdirSync(path.dirname(out), { recursive: true });
   try {
     writeZip(entries, `${out}.part`);
+    if (post) fs.writeFileSync(`${postOut}.part`, post.bytes);
     fs.renameSync(`${out}.part`, out);
+    if (post) fs.renameSync(`${postOut}.part`, postOut);
   } catch (e) {
     fs.rmSync(`${out}.part`, { force: true });
+    if (post) fs.rmSync(`${postOut}.part`, { force: true });
     throw new Refused([e.message]);
   }
   console.log(`wrote ${pos[1]} (${entries.length} files under ${top}/)`);
+  if (post) console.log(`wrote ${path.basename(postOut)} beside it (the post)`);
 }
 
 // ---------------------------------------------------------------- main
 
-const COMMANDS = { init, validate, 'add-report': addReport, 'add-profiles': addProfiles, manifest, check: runCheck, zip };
+const COMMANDS = { init, validate, 'add-report': addReport, 'add-profiles': addProfiles, manifest, check: runCheck, 'check-post': runCheckPost, zip };
 
 function main(argv) {
   const [cmd, ...rest] = argv;
@@ -504,5 +643,7 @@ function main(argv) {
     throw e;
   }
 }
+
+module.exports = { checkPost, POST_LIMIT };
 
 if (require.main === module) main(process.argv.slice(2));

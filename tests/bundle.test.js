@@ -583,3 +583,69 @@ test('add-report: a directory named *.zip inside a report is a directory, not a 
   assert.equal(r.status, 0, r.stdout + r.stderr);
   assert.doesNotMatch(r.stderr, /EISDIR|at /);
 });
+
+// ---- the Discord post beside the zip ----
+const POST = '**Fleet invites drop the second wing**\n\nInviting into wing 2 lands in wing 1.\n\nFull report, patch, tests and evidence in the attached zip.\n';
+
+test('zip --post: writes the zip and, beside it, the post byte for byte as <stem>.post.md', () => {
+  const { d, b } = goodBundle();
+  const post = path.join(d, 'draft.md');
+  const bytes = Buffer.from(POST.replace(/\n/g, '\r\n'), 'utf8');
+  fs.writeFileSync(post, bytes);
+  const out = path.join(d, 'out', 'EveJS-fleet-report.zip');
+  const r = runNoId('zip', b, out, '--post', post);
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  const written = path.join(d, 'out', 'EveJS-fleet-report.post.md');
+  assert.ok(fs.existsSync(out));
+  assert.deepEqual(fs.readFileSync(written), bytes);
+  assert.deepEqual(fs.readdirSync(path.join(d, 'out')).sort(), ['EveJS-fleet-report.post.md', 'EveJS-fleet-report.zip']);
+  assert.ok(!readZip(out).some((e) => /post\.md$/.test(e.name)), 'the post is never inside the zip');
+  assert.match(r.stdout, /EveJS-fleet-report\.post\.md/);
+});
+
+test('zip without --post writes no post and needs none', () => {
+  const { d, b } = goodBundle();
+  const out = path.join(d, 'out', 'EveJS-fleet-report.zip');
+  const r = runNoId('zip', b, out);
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.deepEqual(fs.readdirSync(path.join(d, 'out')), ['EveJS-fleet-report.zip']);
+  assert.doesNotMatch(r.stdout + r.stderr, /post/);
+});
+
+test('zip --post: a bad post, or a bad bundle, means neither file is written', () => {
+  const { d, b } = goodBundle();
+  const out = path.join(d, 'out', 'r.zip');
+  const post = path.join(d, 'draft.md');
+  fs.writeFileSync(post, `${POST}![chart](a.png)\n`);
+  const r = runNoId('zip', b, out, '--post', post);
+  assert.equal(r.status, 2);
+  assert.match(r.stdout, /refusing: draft\.md: .*image/);
+  assert.ok(!fs.existsSync(path.join(d, 'out')) || fs.readdirSync(path.join(d, 'out')).length === 0);
+  fs.writeFileSync(post, POST);
+  put(b, 'BUG-REPORT.md', 'TODO(bundle): x\n');
+  const r2 = runNoId('zip', b, out, '--post', post);
+  assert.equal(r2.status, 2);
+  assert.ok(!fs.existsSync(path.join(d, 'out')) || fs.readdirSync(path.join(d, 'out')).length === 0);
+  assert.equal(runNoId('zip', b, out, '--post', path.join(d, 'missing.md')).status, 64);
+});
+
+test('zip --post: a post inside the bundle folder is refused (it would ship in the zip)', () => {
+  const { d, b } = goodBundle();
+  put(b, 'post.md', POST);
+  assert.equal(run('manifest', b).status, 0);
+  const r = runNoId('zip', b, path.join(d, 'r.zip'), '--post', path.join(b, 'post.md'));
+  assert.equal(r.status, 2);
+  assert.match(r.stdout, /refusing: .*outside the bundle/);
+  assert.ok(!fs.existsSync(path.join(d, 'r.zip')));
+});
+
+test('check --post checks the post too', () => {
+  const { d, b } = goodBundle();
+  const post = path.join(d, 'draft.md');
+  fs.writeFileSync(post, POST);
+  assert.equal(runNoId('check', b, '--post', post).status, 0);
+  fs.writeFileSync(post, `${POST}[p](patches/01-fleet.patch)\n`);
+  const r = runNoId('check', b, '--post', post);
+  assert.equal(r.status, 2);
+  assert.match(r.stdout, /refusing: draft\.md: line \d+: link into the zip/);
+});
