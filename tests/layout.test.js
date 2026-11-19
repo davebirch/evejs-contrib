@@ -171,3 +171,16 @@ test('hygiene: the hashed wording check still fires', () => {
     assert.equal(bannedTokens(lines[2]).length, 1, 'bare word must be caught');
   } finally { fs.rmSync(tmp, { force: true }); }
 });
+
+test('each skill gives an example Discord post, and it passes check-post', () => {
+  const { checkPost, POST_LIMIT } = require('../skills/upstream-report/scripts/bundle.js');
+  for (const name of ['upstream-report', 'upstream-report-perf']) {
+    const text = fs.readFileSync(path.join(skillsDir, name, 'SKILL.md'), 'utf8').replace(/\r\n/g, '\n');
+    const m = /^( *)````markdown\n([\s\S]*?)\n\1````$/m.exec(text);
+    assert.ok(m, `${name}: no \`\`\`\`markdown example post`);
+    const post = m[2].split('\n').map((l) => l.slice(m[1].length)).join('\n');
+    assert.deepEqual(checkPost(post), [], `${name}: the example post fails check-post`);
+    assert.ok([...post.trim()].length < POST_LIMIT / 2, `${name}: the example should be short`);
+    assert.match(post, /attached zip/, `${name}: the example ends by pointing at the zip`);
+  }
+});

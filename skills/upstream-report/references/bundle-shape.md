@@ -3,7 +3,7 @@
 Each document is plain Markdown. Examples are made up: replace them with your own facts. Keep the
 wording plain and specific; numbers and log lines beat adjectives.
 
-## BUG-REPORT.md (40 lines or fewer; this is the text to post)
+## BUG-REPORT.md (40 lines or fewer; the full report: the Discord post beside the zip is condensed from it)
 
 - **Title** (one line): symptom and trigger. Example: `# Fleet size is off by one when a fleet is formed`
 - **Environment and reproduction** (3-8 lines): version, platform, Node.js version, steps.

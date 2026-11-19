@@ -35,6 +35,20 @@ Download `evejs-contrib-<version>.zip` from the GitHub release and unzip it. Cop
 `~/.agents/skills/`. The zip holds both layouts: `skills/` for Claude Code and `.agents/skills/` for Codex
 (byte-identical copies).
 
+## What you get
+
+Two files, side by side:
+
+- `<name>.zip`: the bundle, one top folder holding the report (`BUG-REPORT.md`), the patch, the changed
+  files, the tests, a developer handoff and upstream's own error report (redacted), with checksums.
+- `<name>.post.md`: a condensed post to paste into the EveJS Discord with the zip attached: one message of
+  at most 1,900 characters (Discord's limit is 2,000), with no links into the zip, no images and no tables
+  (except a small one in a code block).
+  `bundle.js check-post` checks it, and `bundle.js zip <dir> <name>.zip --post <post>` writes it beside the
+  zip; both use the same leak scan as the bundle.
+
+The skills prepare both; a person posts them.
+
 ## Leak terms
 
 The leak scan always checks home paths, IP addresses (all but loopback, unspecified and
