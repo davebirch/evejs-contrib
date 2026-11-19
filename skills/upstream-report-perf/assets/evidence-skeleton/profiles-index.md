@@ -1,6 +1,6 @@
 # Profiles index
 
-Which profile belongs to which record. Profiles keep their original bytes apart from redaction.
+Which profile belongs to which record. Copy this file only when a run kept profiles. Profiles keep their original bytes apart from redaction.
 
 ## Close Watch profiles
 
@@ -9,6 +9,16 @@ One row per `cpuCapture` record in each side's `server-health.log` that falls in
 | Side   | Profile file (in `<side>/close-watch/`) | Capture start (UTC) | Duration (ms) | Present |
 |--------|-----------------------------------------|---------------------|---------------|---------|
 | TODO(bundle): before or after | TODO(bundle) | TODO(bundle) | TODO(bundle) | TODO(bundle): yes or rotated out |
+
+## Other profiles in close-watch/
+
+Profiles with no `cpuCapture` record (for example segment profiles a load harness kept): one row each.
+
+| Side   | Profile file | Covers (step or UTC span) | How it was made |
+|--------|--------------|---------------------------|-----------------|
+| TODO(bundle): side | TODO(bundle) | TODO(bundle) | TODO(bundle) |
+
+TODO(bundle): delete this section if there are none.
 
 ## Pause-profiler profiles
 
