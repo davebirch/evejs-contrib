@@ -1,0 +1,16 @@
+{
+  "name": "evejs-contrib",
+  "owner": {
+    "name": "evejs-contrib contributors"
+  },
+  "metadata": {
+    "description": "Skills and scripts for EveJS server admins: prepare upstream bug-report bundles with redacted evidence."
+  },
+  "plugins": [
+    {
+      "name": "evejs-contrib",
+      "source": "./",
+      "description": "Tooling for EveJS contributors: build upstream bug-report bundles."
+    }
+  ]
+}

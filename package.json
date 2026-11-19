@@ -1,0 +1,11 @@
+{
+  "name": "evejs-contrib",
+  "private": true,
+  "license": "MIT",
+  "scripts": {
+    "test": "node --test \"tests/**/*.test.js\"",
+    "build": "node scripts/build-zip.js"
+  },
+  "repository": "https://github.com/davebirch/evejs-contrib",
+  "homepage": "https://github.com/davebirch/evejs-contrib"
+}

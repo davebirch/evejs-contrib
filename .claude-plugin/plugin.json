@@ -1,0 +1,11 @@
+{
+  "name": "evejs-contrib",
+  "description": "Tooling for EveJS contributors: skills and scripts that build upstream bug-report bundles (report, patch, tests, handoff) ready to send to the EveJS developers.",
+  "version": "0.1.0",
+  "license": "MIT",
+  "author": {
+    "name": "evejs-contrib contributors"
+  },
+  "homepage": "https://github.com/davebirch/evejs-contrib",
+  "repository": "https://github.com/davebirch/evejs-contrib"
+}
