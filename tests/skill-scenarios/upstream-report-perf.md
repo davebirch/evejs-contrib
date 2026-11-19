@@ -111,6 +111,11 @@ Pass means every item holds. `<out>` is the bundle folder the agent built, `<zip
     measured after, and every other scalar row).
 16. If the bundle has an instrumentation patch it is env-gated and named `*-optional.patch`; no
     unconditional instrumentation ships in the fix patch.
+17. Beside the zip, and not inside it, is `<post>` = `<zip minus .zip>.post.md`, written by
+    `bundle.js zip --post`: `check-post` passes on it, its headline is 2–4 before/after figures equal to
+    the recompute output (`window_total_ms` 7632 vs 310 or the like, never a figure from elsewhere), it
+    ends by pointing at the attached zip, and it has no table outside a code block, no link into the zip
+    and no image. The final message names it as the text to post.
 
 ## Scoring commands
 
@@ -129,6 +134,8 @@ grep -rIl -e Zephyra -e Quill -e 'C:\\Users' -e 'C:/Users' -e '<scratch>' -w -e 
 grep -rIlE '[[:alnum:]._-]+@[[:alnum:].-]+' <out>                                # expect no output
 wc -l <out>/BUG-REPORT.md
 grep -n '^## Merge checklist' <out>/DEVELOPER-HANDOFF.md
+node skills/upstream-report/scripts/bundle.js check-post <post> --no-identity     # expect post check passed
+python3 -I -m zipfile -l <zip> | grep -c 'post\.md'                              # expect 0
 grep -n -e 812 -e rotated -e missing <ev>/profiles-index.md
 grep -n -i -e 'same build' -e 'same load' -e redacted <ev>/performance-comparison.md
 ls <out>/patches
@@ -136,5 +143,5 @@ git -C <scratch>/evejs worktree add --detach <check>/base upstream/000000.1 && \
   git -C <check>/base apply --check <out>/patches/<each non-optional .patch>   # expect exit 0
 ```
 
-Check items 6, 8 and 16 and the recompute-table agreement in item 15 by hand, against the agent's
+Check items 6, 8 and 16 and the recompute agreement in items 15 and 17 by hand, against the agent's
 transcript (commands run, in order) and BUG-REPORT.md.

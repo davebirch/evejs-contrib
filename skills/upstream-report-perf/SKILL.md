@@ -118,7 +118,31 @@ Use `upstream-report` step 5's names file (every character in the logs, one per 
   `patches/<name>-optional.patch`, gated by an environment variable and off by default, never inside the
   fix patch. The README says which patches are optional.
 
+## 5. The Discord post
+
+Write it as `upstream-report` step 7 says (outside the bundle, at most 1,900 characters, no tables
+outside a code block, no links into the zip, no images), with the headline evidence as the **2–4 key
+before/after figures** of the headline table, verbatim from the recompute output, and one honest line
+on the tail. Name the comparison (pristine release vs release + this fix only) in a few words. Aim for
+one message; a second part (`--- part 2/2 ---`) only if the essentials can't fit, and tell the user
+why. Check it with `node <ur>/scripts/bundle.js check-post <post>`. An example (made-up figures):
+
+````markdown
+**Market: order matching rebuilds its price index every tick**
+
+With a few thousand open orders the market rebuilds its whole price index on every tick, so ticks
+slow down as the market fills. The fix keeps the index and updates only the orders that changed.
+
+**Tick health**, EveJS 000000.1 vs 000000.1 + this fix, 3 runs per side (median):
+- whole tick p50 at 2,000 orders: 18.4 → 6.1 ms
+- market subsystem p50: 12.9 → 0.8 ms
+- 5-minute soak p99: 41.0 → 30.2 ms (the slowest ticks left are GC pauses, on both sides)
+
+Full report, patch, tests and evidence (with a script to recompute every figure) in the attached zip.
+````
+
 ## Finish
 
-Back to `upstream-report` step 7: `manifest`, `check`, repeat until `check passed`, then `zip`. Run
-`manifest` again after any edit, including to `expected.json`.
+Back to `upstream-report` step 8: `manifest`, `check`, repeat until `check passed`, then step 9's
+`zip --post`. Run `manifest` again after any edit, including to `expected.json`, and update the post
+if a figure in it changed.
