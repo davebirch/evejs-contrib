@@ -44,7 +44,7 @@ test('zip has both layouts with identical bytes and nothing else', () => {
   for (const want of ['.claude-plugin/plugin.json', '.claude-plugin/marketplace.json', 'LICENSE', 'README.md']) {
     assert.ok(byName.has(`evejs-contrib/${want}`), want);
   }
-  assert.ok(![...byName.keys()].some((n) => /^evejs-contrib\/(tests|dist|\.git|\.github|node_modules|scripts)\/|package\.json|plugin-release|build-zip/.test(n)));
+  assert.ok(![...byName.keys()].some((n) => /^evejs-contrib\/(tests|dist|\.git|\.github|node_modules|scripts)\/|package\.json|release-check|release-please|CHANGELOG|build-zip/.test(n)));
 });
 
 test('refuses a symlink in the sources', (t) => {

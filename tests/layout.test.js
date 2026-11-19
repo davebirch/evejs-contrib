@@ -7,6 +7,16 @@ const path = require('node:path');
 const root = path.join(__dirname, '..');
 const readJson = (p) => JSON.parse(fs.readFileSync(path.join(root, p), 'utf8'));
 
+test('the version lives only in plugin.json and package.json, and they match', () => {
+  const read = (f) => JSON.parse(fs.readFileSync(path.join(__dirname, '..', f), 'utf8'));
+  const plugin = read('.claude-plugin/plugin.json');
+  assert.match(plugin.version, /^\d+\.\d+\.\d+$/);
+  assert.equal(read('package.json').version, plugin.version);
+  const market = read('.claude-plugin/marketplace.json');
+  assert.ok(!('version' in market), 'marketplace.json has a version');
+  for (const p of market.plugins || []) assert.ok(!('version' in p), `marketplace entry ${p.name} has a version`);
+});
+
 test('plugin.json', () => {
   const p = readJson('.claude-plugin/plugin.json');
   assert.equal(p.name, 'evejs-contrib');

@@ -1,0 +1,30 @@
+name: pr-title
+
+# Squash-merge uses the PR title as the commit message, and release-please reads it to pick the version bump.
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+
+permissions:
+  pull-requests: read
+
+jobs:
+  title:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: amannn/action-semantic-pull-request@v6.1.1
+        with:
+          types: |
+            feat
+            fix
+            chore
+            docs
+            test
+            refactor
+            ci
+            perf
+            build
+            revert
+          # a "!" after the type marks a breaking change, e.g. "feat!: ..."
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
