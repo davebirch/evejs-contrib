@@ -31,9 +31,13 @@ NODE_OPTIONS=--require=<absolute path of the plugin>/skills/upstream-report-perf
 
 Set both in the environment that starts the server (PowerShell: `$env:NAME = '...'` before
 `StartServer.bat`; Docker: the service's `environment:` with the sampler file mounted into the
-container), one file per run. A path with spaces goes in double quotes inside `NODE_OPTIONS`
-(`--require "C:\EveJS tools\tick-sampler.js"`). Without `EVEJS_TICK_SAMPLES` it does nothing. `NODE_OPTIONS` reaches every
-Node process started from that shell; only the one running the space runtime writes ticks.
+container), one file per run. A path with spaces goes in double quotes inside `NODE_OPTIONS`, written
+with forward slashes (`--require "C:/EveJS tools/tick-sampler.js"`): Node reads a backslash inside those
+quotes as an escape. Without `EVEJS_TICK_SAMPLES` it does nothing. `NODE_OPTIONS` reaches every Node
+process started from that shell or container (setup and market tools too) and every worker thread; the
+sampler skips worker threads, and a process that never loads the space runtime writes nothing, so only
+the server writes to the file. Stop the server after the last step ends: a hard stop can lose its last
+second of ticks.
 
 ## Capture design (the default for a throughput fix)
 
@@ -76,7 +80,9 @@ times and upstream's own part labels), then describe the runs:
 - `subsystem`: the tick-breakdown label the fix changes (omit it when the fix has no single part).
 - `kind`: `repeat` (the default) or `soak`. Runs of kind `repeat` with the same step are summarised
   together; a soak never is.
-- Step names must match across sides. Leave a few seconds out at each load change (`from`/`to` are
+- Run and step names are letters, digits, `_` and `-`; both sides of a run have the same `kind`.
+- Step names must match across sides. A step with under 80% of the ticks its length should hold is
+  warned about (a gap, or the sampler started late). Leave a few seconds out at each load change (`from`/`to` are
   half-open: `from` <= tick start < `to`). UTC with `Z` or an offset, never local time.
 
 ## What recompute.js prints (`tick_health`)
@@ -88,9 +94,10 @@ times and upstream's own part labels), then describe the runs:
   `loop_delay_max_ms`, `cpu_mean_pct` (from the per-second samples). Percentiles are nearest-rank.
 - `repeats.<side>.<step>`: `runs` (how many) and, for each stat above, `{median, min, max}` across the
   repeats; only when a side has 2 or more repeats of that step.
-- A repeat whose mean, p50 or p99 is over 1.5 times its repeats' median (and 1 ms or more above it)
+- A repeat whose mean, p50 or p99 is over 1.5 times its repeats' median or under two thirds of it (and
+  1 ms or more from it)
   prints an `outlier:` warning naming the run, side, step and stat: explain it or list it as open.
 - A key the data can't give (no samples, no lateness, no subsystem) is absent, never null.
 
-Report the repeats' **median with its spread** (`9.3 (8.9–9.5)`) for means and p50s, and the soak for
+Report the repeats' **median with its spread** (`9.26 (8.92–9.46)`) for means and p50s, and the soak for
 p99, max and pause rates. A difference smaller than the spread is not a result.

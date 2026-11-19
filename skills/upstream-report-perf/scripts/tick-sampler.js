@@ -8,13 +8,15 @@
 // Load it into the server process with Node's --require, set from outside the server:
 //   EVEJS_TICK_SAMPLES=<absolute path of the .jsonl to write>
 //   NODE_OPTIONS=--require=<absolute path of this file>
-// Without EVEJS_TICK_SAMPLES it does nothing. Each second it finds those modules among the ones the server
-// has already loaded (it never loads anything itself), appends the ticks and samples it has not written
-// yet, and stops with the process. Lines:
+// Without EVEJS_TICK_SAMPLES it does nothing, and it never runs in worker threads. Each second it looks for
+// those modules among the ones the process has already loaded (it never loads anything itself); a process
+// that never loads the space runtime (a tool, a setup script) writes nothing. It appends the ticks and
+// samples it has not written yet, and stops with the process. Lines:
 //   {"kind":"start","utc":...,"sampler":1,"pid":...,"node":...}
 //   {"kind":"tick","utc":<tick start>,"tickDurationMs","latenessMs","subsystemMs"}
 //   {"kind":"sample","utc":<sample time>,"eventLoopDelayMeanMs","eventLoopDelayP99Ms","eventLoopDelayMaxMs","cpuPercent"}
-// A tick's utc is its start on the wall clock (performance.timeOrigin + its monotonic start).
+// A tick's utc is its start on the wall clock (its monotonic start plus the wall-minus-monotonic offset at
+// the poll). The last second before a hard stop (Ctrl+C on a server that doesn't handle it) may be lost.
 const fs = require('node:fs');
 const { performance } = require('node:perf_hooks');
 
@@ -24,9 +26,14 @@ const RUNTIME = /[\\/]server[\\/]src[\\/]space[\\/]runtime\.js$/;
 const MONITOR = /[\\/]server[\\/]src[\\/]utils[\\/]serverHealthMonitor\.js$/;
 const r2 = (x) => (typeof x === 'number' && Number.isFinite(x) ? Math.round(x * 100) / 100 : null);
 
+const found = new Map(); // pattern -> exports, once the server has loaded the module
 function loaded(pattern) {
+  if (found.has(pattern)) return found.get(pattern);
   for (const [file, mod] of Object.entries(require.cache)) {
-    if (pattern.test(file) && mod && mod.loaded) return mod.exports;
+    if (pattern.test(file) && mod && mod.loaded) {
+      found.set(pattern, mod.exports);
+      return mod.exports;
+    }
   }
   return null;
 }
@@ -38,11 +45,18 @@ function start() {
     if (!lines.length) return;
     try { fs.appendFileSync(OUT, lines.join('\n') + '\n'); } catch (e) { /* never disturb the server */ }
   };
-  write([JSON.stringify({ kind: 'start', utc: new Date().toISOString(), sampler: 1, pid: process.pid, node: process.version })]);
+  let started = false;
   const poll = () => {
     const lines = [];
     try {
       const runtime = loaded(RUNTIME);
+      if (!runtime) return; // not the server process (or not yet): write nothing
+      if (!started) {
+        started = true;
+        lines.push(JSON.stringify({ kind: 'start', utc: new Date().toISOString(), sampler: 1, pid: process.pid, node: process.version }));
+      }
+      // Wall clock at this poll minus the monotonic clock, so a clock step or a resume moves ticks with it.
+      const wallOffset = Date.now() - performance.now();
       const recent = runtime && Array.isArray(runtime._recentTickSummaries) ? runtime._recentTickSummaries : [];
       for (const t of recent) {
         const at = Number(t && t.startedAtMonotonicMs);
@@ -51,7 +65,7 @@ function start() {
         const subsystemMs = {};
         for (const [k, v] of Object.entries(t.subsystemMs || {})) if (r2(v) !== null) subsystemMs[k] = r2(v);
         lines.push(JSON.stringify({
-          kind: 'tick', utc: new Date(performance.timeOrigin + at).toISOString(),
+          kind: 'tick', utc: new Date(wallOffset + at).toISOString(),
           tickDurationMs: r2(t.tickDurationMs), latenessMs: r2(t.latenessMs), subsystemMs,
         }));
       }
@@ -76,4 +90,5 @@ function start() {
   process.on('exit', poll);
 }
 
-if (OUT) start();
+// Only the main thread: a --require in NODE_OPTIONS also runs in every worker thread.
+if (OUT && require('node:worker_threads').isMainThread) start();

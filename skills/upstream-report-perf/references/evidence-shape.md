@@ -50,14 +50,14 @@ out of the table and say so in the coverage notes.
   before explaining it; a repeat's spread can come from a different run than the biggest tick.
 - **Only numbers from these runs' recompute output.** Never quote a number from an earlier or superseded
   measurement (a previous capture, a commit message, a draft), even when it looks better.
-- Repeats: quote the median with its spread (`9.3 (8.9–9.5)`); a difference inside the spread is not
+- Repeats: quote the median with its spread (`9.26 (8.92–9.46)`); a difference inside the spread is not
   a result.
 
 ## performance-comparison.md
 
 - **Opening** (2–3 sentences): the symptom, the headline result with its p50 and its tail, and what the
   numbers don't show. Example: `The fighter section of each tick costs 11.7 ms with 100 bots fighting. With
-  the fix the whole tick's p50 falls from 16.2 to 9.3 ms (median of 3 repeats), but the soak's p99 barely
+  the fix the whole tick's p50 falls from 16.12 to 9.26 ms (median of 3 repeats), but the soak's p99 barely
   moves (30.3 → 28.5 ms): the slowest ticks are major GC pauses, as often on both sides.`
 - **Kind of fix**: throughput, stalls or both, and the one-line headline justification.
 - **Testing methodology**: the capture design actually used (see `references/tick-health.md`): builds

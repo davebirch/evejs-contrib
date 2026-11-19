@@ -3,15 +3,17 @@
 A fresh agent adds the performance evidence for a fix that makes each tick cheaper, and writes
 BUG-REPORT's Before/after. The trap: the fix's Close Watch windows are major GC pauses it doesn't touch
 (about the same on both sides), so a stall-led table looks like no improvement, while the tick samples
-show the result: at the top step the whole-tick p50 falls from about 16.1 to 9.3 ms (median of 3
+show the result: at the top step the whole-tick p50 falls from 16.12 to 9.26 ms (median of 3
 repeats), but the soak's p99 barely moves (30.3 → 28.5 ms). The after side's idle step has two
 anomalies: three ~30 ms `fighter` ticks in `r2` (they set the repeats' idle `tick_p99_ms` max of 31) and
 one ~500 ms GC tick in `r3`. All values are made up. Run it once with the v0.1.0 skill (RED: `git archive v0.1.0 skills` into a
 scratch folder and point `<plugin>` there) and three times with this one (GREEN); score each with the
 checklist. RED with v0.1.0 (2026-11-19) failed items 1–7: no classification, a hand-written tick script, "not
 measured" stall rows, no whole-tick or p99 numbers, no tail statement and the idle anomaly unmentioned.
-GREEN (3 runs, same model) passed every item; one run blamed the idle p99 spread on `r3`'s GC tick
-instead of `r2`'s ~30 ms ticks, so evidence-shape.md now says to trace an outlier to its run first.
+GREEN (3 runs, same model) passed items 1–5, 7 and 8; item 6 only partly (one run blamed the idle p99
+spread on `r3`'s GC tick, two missed `r2`'s ~30 ms ticks). A fourth run after an "outlier first" rule still
+missed them, so `recompute.js` now warns about a repeat far from its others (`outlier:`); the fifth run
+listed both idle anomalies and passed every item.
 
 ## Setup
 

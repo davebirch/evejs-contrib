@@ -118,6 +118,25 @@ test('repeats: a run far above its repeats is warned about as an outlier, naming
   assert.doesNotMatch(r.stderr, /outlier: run "r1"/);
 });
 
+test('repeats: a run far below its repeats is an outlier too', () => {
+  const files = {};
+  const runs = [];
+  [[9, 9, 9], [9, 9, 9], [2, 2, 2]].forEach((d, i) => {
+    files[`r${i + 1}.jsonl`] = ticks(T0, d);
+    runs.push(run(`r${i + 1}`, 'before', `r${i + 1}.jsonl`, [step('load', T0, 300)]));
+  });
+  assert.match(metrics(evidence(runs, files)).stderr, /outlier: run "r3" before step "load" tick_p50_ms 2 against a median of 9/);
+});
+
+test('a step with under 80% of its expected ticks is warned about', () => {
+  const ev = evidence([run('r1', 'before', 'a.jsonl', [step('s', T0, 1000)])], { 'a.jsonl': ticks(T0, [1, 2, 3, 4, 5, 6, 7]) });
+  const r = metrics(ev);
+  assert.equal(r.status, 0);
+  assert.match(r.stderr, /step "s": 7 ticks where about 10 were expected/);
+  const ok = evidence([run('r1', 'before', 'a.jsonl', [step('s', T0, 1000)])], { 'a.jsonl': ticks(T0, [1, 2, 3, 4, 5, 6, 7, 8]) });
+  assert.doesNotMatch(metrics(ok).stderr, /were expected/);
+});
+
 test('one run per side gives no repeats key', () => {
   const ev = evidence([run('r1', 'before', 'a.jsonl', [step('s', T0, 300)]), run('r1', 'after', 'a.jsonl', [step('s', T0, 300)])], { 'a.jsonl': ticks(T0, [1, 2, 3]) });
   assert.ok(!('repeats' in out(ev).tick_health));
@@ -140,6 +159,9 @@ test('bad runs.json is a usage error (64)', () => {
     { runs: [run('r1', 'before', 'a.jsonl', [{ step: 's', from: '2026-11-18T20:00:00', to: '2026-11-18T20:01:00' }])] },
     { runs: [run('r1', 'before', 'a.jsonl', [step('s', T0, 100)], 'long')] },
     { runs: [run('r1', 'before', 'a.jsonl', [step('s', T0, 100)]), run('r1', 'before', 'a.jsonl', [step('s', T0, 100)])] },
+    { runs: [run('r1', 'before', 'a.jsonl', [step('s', T0, 100)]), run('r1', 'after', 'a.jsonl', [step('s', T0, 100)], 'soak')] },
+    { runs: [run('__proto__', 'before', 'a.jsonl', [step('s', T0, 100)])] },
+    { runs: [run('r1', 'before', 'a.jsonl', [step('a.b', T0, 100)])] },
   ];
   for (const b of bad) {
     const ev = evidence(b.runs, { 'a.jsonl': ticks(T0, [1]) });
@@ -226,7 +248,12 @@ test('tick-sampler: does nothing without EVEJS_TICK_SAMPLES; with it, writes tic
     const m = { isRunning: () => true, getSnapshot: () => ({ history: history.slice() }) };
     module.exports = { getServerHealthMonitor: () => m };`);
   const main = path.join(d, 'main.js');
-  fs.writeFileSync(main, `require('./server/src/space/runtime.js'); require('./server/src/utils/serverHealthMonitor.js'); setTimeout(() => {}, 700);`);
+  fs.writeFileSync(main, `require('./server/src/space/runtime.js'); require('./server/src/utils/serverHealthMonitor.js');
+    const { Worker } = require('node:worker_threads');
+    new Worker(\`require(\${JSON.stringify(require.resolve('./server/src/space/runtime.js'))}); setTimeout(() => {}, 300)\`, { eval: true });
+    setTimeout(() => {}, 700);`);
+  const tool = path.join(d, 'tool.js');
+  fs.writeFileSync(tool, 'setTimeout(() => {}, 300);');
   const outFile = path.join(d, 'out.jsonl');
   const env = { ...process.env, EVEJS_TICK_SAMPLES_POLL_MS: '100' };
   delete env.EVEJS_TICK_SAMPLES;
@@ -235,8 +262,12 @@ test('tick-sampler: does nothing without EVEJS_TICK_SAMPLES; with it, writes tic
   assert.ok(!fs.existsSync(outFile));
   r = spawnSync(process.execPath, ['--require', SAMPLER, main], { encoding: 'utf8', env: { ...env, EVEJS_TICK_SAMPLES: outFile } });
   assert.equal(r.status, 0, r.stderr);
+  // a process that never loads the runtime (a tool) writes nothing, not even a start line
+  r = spawnSync(process.execPath, ['--require', SAMPLER, tool], { encoding: 'utf8', env: { ...env, EVEJS_TICK_SAMPLES: outFile } });
+  assert.equal(r.status, 0, r.stderr);
   const rows = fs.readFileSync(outFile, 'utf8').trim().split('\n').map((l) => JSON.parse(l));
   assert.equal(rows[0].kind, 'start');
+  assert.equal(rows.filter((x) => x.kind === 'start').length, 1, 'one start line: no worker thread, no tool');
   const t = rows.filter((x) => x.kind === 'tick');
   const smp = rows.filter((x) => x.kind === 'sample');
   assert.ok(t.length >= 10, `ticks ${t.length}`);

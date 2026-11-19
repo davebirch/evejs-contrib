@@ -146,7 +146,8 @@ function summarise(dir, side, win) {
 // leaves zero labels out), lateness, ticks of 100 ms or more and 250 ms or more (and per minute), event
 // loop delay and CPU from the samples. Keys a run did not measure are left out, never null. Across the
 // repeats of a side (kind "repeat", 2 or more runs with that step): each stat's median, min and max; a
-// repeat whose mean, p50 or p99 is over 1.5 times the median (and 1 ms or more above it) is warned about.
+// repeat whose mean, p50 or p99 is over 1.5 times the median or under two thirds of it (and 1 ms or more
+// from it) is warned about.
 const round2 = (x) => Math.round(x * 100) / 100;
 const nearest = (sorted, q) => sorted[Math.ceil(sorted.length * q) - 1];
 const mean = (xs) => xs.reduce((a, b) => a + b, 0) / xs.length;
@@ -168,14 +169,15 @@ const zonedIso = (v) => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}
 function readRuns(thDir) {
   const file = path.join(thDir, 'runs.json');
   let raw;
-  try { raw = JSON.parse(fs.readFileSync(file, 'utf8').replace(/^﻿/, '')); } catch (e) { throw new Usage(`cannot read ${file}: ${e.message}`); }
+  try { raw = JSON.parse(fs.readFileSync(file, 'utf8').replace(/^\uFEFF/, '')); } catch (e) { throw new Usage(`cannot read ${file}: ${e.message}`); }
   const bad = (m) => { throw new Usage(`tick-health/runs.json: ${m}`); };
   if (!raw || typeof raw !== 'object' || !Array.isArray(raw.runs) || !raw.runs.length) bad('needs a non-empty "runs" list');
   if (raw.subsystem !== undefined && (typeof raw.subsystem !== 'string' || !raw.subsystem)) bad('"subsystem" must be a tick breakdown label');
   const seen = new Set();
   const runs = raw.runs.map((r, i) => {
     const at = `runs[${i}]`;
-    if (!r || typeof r.run !== 'string' || !/^[\w.-]+$/.test(r.run)) bad(`${at}: "run" must be a name of letters, digits, . _ or -`);
+    const nameOk = (v) => typeof v === 'string' && /^[\w-]+$/.test(v) && v !== '__proto__';
+    if (!r || !nameOk(r.run)) bad(`${at}: "run" must be a name of letters, digits, _ or -`);
     if (!SIDES.includes(r.side)) bad(`${at}: "side" must be "before" or "after"`);
     const kind = r.kind === undefined ? 'repeat' : r.kind;
     if (kind !== 'repeat' && kind !== 'soak') bad(`${at}: "kind" must be "repeat" or "soak"`);
@@ -185,7 +187,7 @@ function readRuns(thDir) {
     if (!Array.isArray(r.steps) || !r.steps.length) bad(`${at}: needs a non-empty "steps" list`);
     const names = new Set();
     const steps = r.steps.map((s, j) => {
-      if (!s || typeof s.step !== 'string' || !s.step) bad(`${at}.steps[${j}]: needs a "step" name`);
+      if (!s || !nameOk(s.step)) bad(`${at}.steps[${j}]: "step" must be a name of letters, digits, _ or -`);
       if (names.has(s.step)) bad(`${at}: step "${s.step}" appears twice`);
       names.add(s.step);
       if (!zonedIso(s.from) || !zonedIso(s.to)) bad(`${at}.steps[${j}]: from/to must be ISO date-times ending in Z or +hh:mm`);
@@ -196,6 +198,10 @@ function readRuns(thDir) {
     });
     return { run: r.run, side: r.side, kind, samples: r.samples, steps };
   });
+  for (const r of runs) {
+    const other = runs.find((x) => x.run === r.run && x.kind !== r.kind);
+    if (other) bad(`run "${r.run}": its sides disagree on "kind" (${r.kind} and ${other.kind})`);
+  }
   return { subsystem: raw.subsystem || null, runs };
 }
 
@@ -251,6 +257,8 @@ function tickHealth(thDir) {
       const st = ticks.filter(inStep);
       if (!st.length) throw new Refused(`run "${r.run}" ${r.side} step "${step.step}": no ticks between its from and to (check the UTC times and the samples file)`);
       run[r.side][step.step] = stepStats(st, samples.filter(inStep), step, subsystem);
+      const expected = (step.to - step.from) / 100;
+      if (st.length < 0.8 * expected) warnings.push(`run "${r.run}" ${r.side} step "${step.step}": ${st.length} ticks where about ${Math.round(expected)} were expected at 10 Hz (a gap, a late sampler start or a slowed tick?); its per-minute rates count the step's full length`);
     }
   }
   if (subsystem && !subsystemSeen) warnings.push(`no tick has the subsystem label "${subsystem}": check the spelling against the tick breakdown (sub_* are all 0)`);
@@ -270,14 +278,18 @@ function tickHealth(thDir) {
         if (!reps.every((x) => isNum(x[key]))) continue;
         const med = median(reps.map((x) => x[key]));
         for (const [name, x] of named) {
-          if (x[key] > med * 1.5 && x[key] - med >= 1) warnings.push(`outlier: run "${name}" ${side} step "${step}" ${key} ${x[key]} against a median of ${round2(med)} across its repeats: explain it or list it as an open question`);
+          const far = (x[key] > med * 1.5 || x[key] < med / 1.5) && Math.abs(x[key] - med) >= 1;
+          if (far) warnings.push(`outlier: run "${name}" ${side} step "${step}" ${key} ${x[key]} against a median of ${round2(med)} across its repeats: explain it or list it as an open question`);
         }
       }
       const agg = { runs: reps.length };
-      for (const key of Object.keys(reps[0])) {
+      for (const key of [...new Set(reps.flatMap((x) => Object.keys(x)))]) {
         if (key === 'ticks' || key === 'samples') continue;
         const vs = reps.map((x) => x[key]);
-        if (!vs.every(isNum)) continue;
+        if (!vs.every(isNum)) {
+          warnings.push(`${side} step "${step}": ${key} is missing from some repeats, so it has no median`);
+          continue;
+        }
         agg[key] = { median: round2(median(vs)), min: Math.min(...vs), max: Math.max(...vs) };
       }
       (result.repeats[side] = result.repeats[side] || {})[step] = agg;
