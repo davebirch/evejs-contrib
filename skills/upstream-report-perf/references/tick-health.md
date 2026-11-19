@@ -41,7 +41,7 @@ Node process started from that shell; only the one running the space runtime wri
    prerequisites, on the same machine, with CPU pinning if the host allows (for example
    `docker run --cpuset-cpus`) and nothing else running.
 2. **Short load-step phases, repeated.** One run is an idle control step, then stepped load (say 25, 50
-   and 100 of whatever the fix is about), with one step heavier than you expect players to reach; about
+   and 100 of whatever the fix is about), with one step heavier than you expect in normal use; about
    20 s per step. Repeat 3 to 5 times, **alternating** before and after (before, after, before, ...), a
    fresh server start each time. Means and p50s settle within a step; repeats show the run-to-run spread.
 3. **One long soak per side at the top load** (for example 5 minutes) for the tail: p99, max and how
