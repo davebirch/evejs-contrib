@@ -627,10 +627,13 @@ function placeAll(moves, { rename = fs.renameSync, rm = fs.rmSync } = {}) {
     }
     for (const m of moves) { rename(m.part, m.dest); placed.push(m.dest); }
   } catch (e) {
-    for (const p of placed) rm(p, { force: true });
+    // restores first (each replaces the new file at its dest), then best-effort removals: a cleanup that
+    // throws never stops the old files coming back
+    const tryRm = (p) => { try { rm(p, { force: true }); } catch (e2) { console.error(`warning: could not delete ${path.basename(p)}: ${e2.message} (safe to delete)`); } };
     const leftover = [];
     for (const a of aside) { try { rename(a.old, a.dest); } catch (e2) { leftover.push(a.old); } }
-    for (const m of moves) rm(m.part, { force: true });
+    for (const p of placed) if (!aside.some((a) => a.dest === p && !leftover.includes(a.old))) tryRm(p);
+    for (const m of moves) tryRm(m.part);
     if (leftover.length) e.leftover = leftover;
     throw e;
   }

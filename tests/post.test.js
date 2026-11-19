@@ -289,3 +289,18 @@ test('placeAll: failing to delete a set-aside copy after success only warns', (t
   assert.equal(warnings.length, 1);
   assert.match(warnings[0], /warning: could not delete r\.zip\.\d+\.old: in use \(safe to delete\)/);
 });
+
+test('placeAll: an rm that throws during cleanup still lets the old files come back', () => {
+  const d = tmp();
+  const f = (n, t) => { fs.writeFileSync(path.join(d, n), t); return path.join(d, n); };
+  const zip = f('r.zip', 'old zip'), post = f('r.post.md', 'old post');
+  f('r.zip.part', 'new zip'); f('r.post.md.part', 'new post');
+  const failing = (from, to) => { if (to === post && from.endsWith('.part')) { const e = new Error('locked'); e.code = 'EPERM'; throw e; } fs.renameSync(from, to); };
+  const rm = () => { throw new Error('rm broke'); };
+  let err;
+  try { placeAll([{ part: `${zip}.part`, dest: zip }, { part: `${post}.part`, dest: post }], { rename: failing, rm }); } catch (e) { err = e; }
+  assert.match(err.message, /locked/);
+  assert.equal(err.leftover, undefined);
+  assert.equal(fs.readFileSync(zip, 'utf8'), 'old zip');
+  assert.equal(fs.readFileSync(post, 'utf8'), 'old post');
+});
