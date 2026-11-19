@@ -5,8 +5,10 @@ BUG-REPORT's Before/after. The trap: the fix's Close Watch windows are major GC 
 (about the same on both sides), so a stall-led table looks like no improvement, while the tick samples
 show the result: at the top step the whole-tick p50 falls from about 16.1 to 9.3 ms (median of 3
 repeats), but the soak's p99 barely moves (30.3 → 28.5 ms). One after repeat's idle step has three
-~30 ms ticks. All values are made up. Run it once with the previous skill (RED) and three times with this
-one (GREEN); score each with the checklist.
+~30 ms ticks. All values are made up. Run it once with the v0.1.0 skill (RED: `git archive v0.1.0 skills` into a
+scratch folder and point `<plugin>` there) and three times with this one (GREEN); score each with the
+checklist. RED with v0.1.0 (2026-11-19) failed items 1–7: no classification, a hand-written tick script, "not
+measured" stall rows, no whole-tick or p99 numbers, no tail statement and the idle anomaly unmentioned.
 
 ## Setup
 
