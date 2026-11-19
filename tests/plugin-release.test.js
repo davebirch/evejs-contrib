@@ -27,14 +27,14 @@ if (process.env.FAKE_FAIL === '${name}' && args[0] !== '--version') { console.er
 
 // A throwaway repo on main with a local bare repo as its remote, plus the fakes.
 function setup() {
-  const base = tmp();
+  const base = fs.realpathSync(tmp());
   const repo = path.join(base, 'repo');
   fs.mkdirSync(repo);
   for (const f of ['.claude-plugin', 'scripts', 'skills', 'LICENSE', 'README.md', 'package.json', '.gitignore']) {
     fs.cpSync(path.join(REPO, f), path.join(repo, f), { recursive: true });
   }
   const remote = path.join(base, 'remote.git');
-  git(base, 'init', '-q', '--bare', remote);
+  git(base, 'init', '-q', '--bare', '-b', 'main', remote);
   git(repo, 'init', '-q', '-b', 'main');
   git(repo, 'config', 'user.name', 'Release Test');
   git(repo, 'config', 'user.email', 'release-test@users.noreply.github.com');
