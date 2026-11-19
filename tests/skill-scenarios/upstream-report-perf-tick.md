@@ -4,11 +4,14 @@ A fresh agent adds the performance evidence for a fix that makes each tick cheap
 BUG-REPORT's Before/after. The trap: the fix's Close Watch windows are major GC pauses it doesn't touch
 (about the same on both sides), so a stall-led table looks like no improvement, while the tick samples
 show the result: at the top step the whole-tick p50 falls from about 16.1 to 9.3 ms (median of 3
-repeats), but the soak's p99 barely moves (30.3 → 28.5 ms). One after repeat's idle step has three
-~30 ms ticks. All values are made up. Run it once with the v0.1.0 skill (RED: `git archive v0.1.0 skills` into a
+repeats), but the soak's p99 barely moves (30.3 → 28.5 ms). The after side's idle step has two
+anomalies: three ~30 ms `fighter` ticks in `r2` (they set the repeats' idle `tick_p99_ms` max of 31) and
+one ~500 ms GC tick in `r3`. All values are made up. Run it once with the v0.1.0 skill (RED: `git archive v0.1.0 skills` into a
 scratch folder and point `<plugin>` there) and three times with this one (GREEN); score each with the
 checklist. RED with v0.1.0 (2026-11-19) failed items 1–7: no classification, a hand-written tick script, "not
 measured" stall rows, no whole-tick or p99 numbers, no tail statement and the idle anomaly unmentioned.
+GREEN (3 runs, same model) passed every item; one run blamed the idle p99 spread on `r3`'s GC tick
+instead of `r2`'s ~30 ms ticks, so evidence-shape.md now says to trace an outlier to its run first.
 
 ## Setup
 
@@ -48,8 +51,8 @@ It writes (`tests/fixtures/make-tick-scenario.js`) `<scratch>/ticks/` (tick-samp
 4. No row reads "not measured" (or 0 for something not measured) anywhere.
 5. The tail is stated plainly: the soak's whole-tick p99 30.3 → 28.5 ms (barely moves), in BUG-REPORT
    and the comparison's opening.
-6. The idle anomaly (after `r2`'s ~30 ms ticks; repeats' idle `tick_p99_ms` max 31) is explained or
-   listed as an open question.
+6. The after idle anomalies (`r2`'s ~30 ms ticks, which give the idle `tick_p99_ms` max of 31; `r3`'s
+   ~500 ms tick) are explained or listed as open questions.
 7. BUG-REPORT has a short "Testing methodology" section; the comparison has the full one (builds,
    pinning, steps × 20 s, 3 alternating repeats, 5-minute soaks, Close Watch on the soaks only).
 8. No number in the write-up that isn't in `expected.json` or the stall output (spot-check five).

@@ -46,6 +46,8 @@ out of the table and say so in the coverage notes.
 - **Explain every anomaly** (a step worse after the fix, a spike in one run type, a run unlike its
   repeats) from the data, or list it as an open question in the comparison and the handoff. Never call
   it noise without saying what you checked.
+  Find which run and tick an outlier comes from (`tick_health.runs.<run>`, then the samples file)
+  before explaining it; a repeat's spread can come from a different run than the biggest tick.
 - **Only numbers from these runs' recompute output.** Never quote a number from an earlier or superseded
   measurement (a previous capture, a commit message, a draft), even when it looks better.
 - Repeats: quote the median with its spread (`9.3 (8.9–9.5)`); a difference inside the spread is not
