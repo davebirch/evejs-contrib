@@ -80,34 +80,41 @@ From a git checkout, build the distributable zip (written to `dist/`):
 npm run build
 ```
 
+## Contributing
+
+Open a pull request against `main`. Squash-merge uses the **PR title** as the commit message, and release-please
+reads it to choose the next version, so the title must follow conventional commits (a workflow checks it):
+
+- `feat: ...` a new feature (minor bump)
+- `fix: ...` a bug fix (patch bump)
+- `docs: ...`, `chore: ...` no release on their own
+- a `!` after the type (`feat!: ...`) marks a breaking change
+
+Never edit the version by hand: it lives only in `.claude-plugin/plugin.json` and `package.json`, and
+release-please keeps them equal.
+
 ## Releasing
 
-For maintainers, from a git checkout (the zip does not include `scripts/`). From a clean `main`:
+Releases happen by merging the release PR. On every push to `main`, release-please opens or updates a PR that
+bumps both versions and writes `CHANGELOG.md`. Merging it tags `v<version>`, creates the GitHub release and
+attaches the zip (built by `scripts/build-zip.js`, both layouts). Pull requests opened with the default
+`GITHUB_TOKEN` do not start the test workflow; add a `RELEASE_PLEASE_TOKEN` repository secret if you want the tests
+to run on the release PR itself.
+
+Users pick up a release with:
 
 ```
-node scripts/plugin-release.js [--patch|--minor|--major] [--owner <owner>] [--remote <name>] [--terms <file>] [--skip-smoke] [--skip-validate] [--dry-run]
+claude plugin update evejs-contrib@evejs-contrib
 ```
 
-The owner defaults to the one in `package.json`'s `repository`; `--owner` overrides it, and `--remote`
-defaults to `origin`. In order, each step refusing (exit 2) with a reason:
+Before merging a release PR you can run the local checks (strict plugin validation, a headless smoke test, and a
+leak scan of the whole tracked tree); it never bumps, tags, pushes or publishes:
 
-1. a dirty tree, a branch other than `main`, a remote that already has the tag or has commits this checkout
-   lacks;
-2. `claude plugin validate --strict .`, then a headless smoke test (`claude --plugin-dir . -p ...`) that must
-   name every skill (`--skip-smoke` skips the smoke test). If `claude` cannot be found or run (on Windows
-   `claude.cmd` is looked up on PATH) the release refuses, `--dry-run` included, unless you pass
-   `--skip-validate`, which skips both checks (and, if `claude` is missing, the local install update);
-3. `npm test`;
-4. bump `.claude-plugin/plugin.json` (patch by default), commit `release: v<x>` and tag `v<x>`;
-5. build the zip from a clone of that tag, so uncommitted files cannot get in (`scripts/build-zip.js`: leak scan,
-   no symlinks, both layouts);
-6. `git push --atomic` of the branch and the tag (if it fails, the message lists what is left locally and how to
-   undo or retry), then `gh release create v<x> <zip> --repo <owner>/evejs-contrib`;
-7. update the local install (`claude plugin marketplace update`, `claude plugin update`) and print a restart notice.
+```
+npm run release-check -- [--terms <file>] [--skip-smoke] [--skip-validate]
+```
 
-`--dry-run` runs the read-only checks, then prints every command that would change anything and changes nothing
-(it only reads the remote, with `git ls-remote`; no fetch).
-A failure before the push (a leak in the build, say) undoes the release commit and tag.
+If `claude` cannot be found or run it refuses (exit 2) unless you pass `--skip-validate`.
 
 `node scripts/build-zip.js [--out <dir>] [--terms <file>]` builds the zip alone into `dist/`. The CI workflow in
 `.github/workflows/test.yml` runs `npm test` on Linux, Windows and macOS with Node 22 and 24.
