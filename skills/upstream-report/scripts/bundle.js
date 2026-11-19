@@ -26,7 +26,8 @@ const SKELETON = path.join(__dirname, '..', 'assets', 'skeleton');
 const VALUE_OPTS = new Set(['--area', '--version', '--repo', '--base', '--as', '--names', '--hosts', '--post']);
 // One Discord message is at most 2,000 characters; a post part keeps 100 of headroom.
 const POST_LIMIT = 1900;
-const POST_MARKER = /^--- part (\d+)\/(\d+) ---$/;
+const POST_MARKER = /^--- part ([1-9]\d*)\/([1-9]\d*) ---$/; // no leading zeros
+const POST_MAX_BYTES = 64 * 1024;
 const TABLE_BLOCK_LINES = 8; // a header, its separator and six rows
 const TABLE_BLOCK_WIDTH = 60;
 
@@ -471,7 +472,15 @@ function checkPost(text, { name = 'post', terms = { terms: [], names: [], identi
   let firstText = lines.findIndex((l) => l.trim());
   lines.forEach((line, i) => {
     const n = i + 1;
-    const f = /^ {0,3}(`{3,}|~{3,})/.exec(line);
+    // a fence: at most 3 spaces, then 3+ backticks or tildes. A backtick line whose rest holds a run of the
+    // same length is a one-line code span (```x``` and more), not a fence; any other backtick in the rest
+    // is refused, but the line still opens the block its author meant.
+    let f = /^ {0,3}(`{3,}|~{3,})/.exec(line);
+    if (f && !fence && f[1][0] === '`') {
+      const rest = line.slice(f[0].length);
+      if (new RegExp(`(?<!\`)${f[1]}(?!\`)`).test(rest)) f = null;
+      else if (rest.includes('`')) say(`line ${n}: a \`\`\` fence's opening line can't contain another backtick (no backticks in the language name; a one-line span ends with \`\`\`)`);
+    }
     if (fence) {
       fenced[i] = true;
       if (f && f[1][0] === fence[0] && f[1].length >= fence.length && !line.slice(f[0].length).trim()) { fence = null; closeBlock(); }
@@ -482,6 +491,7 @@ function checkPost(text, { name = 'post', terms = { terms: [], names: [], identi
     if (f) {
       fenced[i] = true;
       fence = f[1];
+      if (fence[0] === '~') say(`line ${n}: use \`\`\` fences: Discord doesn't render ~~~`);
       block = { start: n, lines: [], table: false };
       parts[parts.length - 1].push(line);
       return;
@@ -539,19 +549,28 @@ function checkPost(text, { name = 'post', terms = { terms: [], names: [], identi
   return problems;
 }
 
-// The post file named by --post (or a check-post argument): its bytes and its checked problems.
+// Whether file is inside dir, on real paths (symlinks resolved), ignoring case where the file system usually does.
+function isInside(dir, file) {
+  const fold = process.platform === 'darwin' || process.platform === 'win32' ? (p) => p.toLowerCase() : (p) => p;
+  const rel = path.relative(fold(fs.realpathSync(dir)), fold(fs.realpathSync(file)));
+  return rel !== '' && rel !== '..' && !rel.startsWith(`..${path.sep}`) && !path.isAbsolute(rel);
+}
+
+// The post file named by --post (or a check-post argument): its bytes and its checked problems. A post is
+// UTF-8 (a BOM is fine) of at most 64 KiB.
 function readPost(file, opts, dir) {
   if (!exists(file) || !fs.statSync(file).isFile()) usage(`no such file: ${file}`);
   const abs = path.resolve(file);
   const name = path.basename(abs);
-  if (dir) {
-    const rel = path.relative(dir, abs);
-    if (!rel.startsWith('..') && !path.isAbsolute(rel)) return { abs, problems: [`${name}: the post must be outside the bundle folder (it would ship inside the zip)`] };
-  }
+  if (dir && isInside(dir, abs)) return { abs, problems: [`${name}: the post must be outside the bundle folder (it would ship inside the zip)`] };
   const bytes = fs.readFileSync(abs);
-  const d = decodeText(bytes);
-  if (!d) return { abs, bytes, problems: [`${name}: not readable as text`] };
-  return { abs, bytes, problems: checkPost(d.text, { ...opts, name }) };
+  if (bytes.length > POST_MAX_BYTES) return { abs, bytes, problems: [`${name}: is ${bytes.length} bytes (limit ${POST_MAX_BYTES}, 64 KiB)`] };
+  if ((bytes[0] === 0xff && bytes[1] === 0xfe) || (bytes[0] === 0xfe && bytes[1] === 0xff)) return { abs, bytes, problems: [`${name}: is UTF-16: save it as UTF-8`] };
+  let text;
+  try { text = new TextDecoder('utf-8', { fatal: true }).decode(bytes); } catch (e) {
+    return { abs, bytes, problems: [`${name}: not valid UTF-8: save it as UTF-8`] };
+  }
+  return { abs, bytes, problems: checkPost(text, { ...opts, name }) };
 }
 
 function checkOpts(opt, flags) {
@@ -590,6 +609,48 @@ function runCheckPost({ pos, opt, flags }) {
   console.log('post check passed');
 }
 
+// Renames each part onto its dest as one step: existing dests are set aside first (as <dest>.<pid>.old), and if
+// any rename fails the placed files are removed, the old ones put back and the parts deleted, then the error is
+// thrown on, with e.leftover listing any old file that could not be put back. Deleting the set-aside copies
+// after success only warns when it fails.
+function placeAll(moves, { rename = fs.renameSync, rm = fs.rmSync } = {}) {
+  for (const m of moves) {
+    if (exists(m.dest) && !fs.lstatSync(m.dest).isFile()) throw new Error(`not a regular file: ${path.basename(m.dest)}`);
+  }
+  const aside = [], placed = [];
+  try {
+    for (const m of moves) {
+      if (!exists(m.dest)) continue;
+      const old = `${m.dest}.${process.pid}.old`;
+      rename(m.dest, old);
+      aside.push({ old, dest: m.dest });
+    }
+    for (const m of moves) { rename(m.part, m.dest); placed.push(m.dest); }
+  } catch (e) {
+    // restores first (each replaces the new file at its dest), then best-effort removals: a cleanup that
+    // throws never stops the old files coming back
+    const tryRm = (p) => { try { rm(p, { force: true }); } catch (e2) { console.error(`warning: could not delete ${path.basename(p)}: ${e2.message} (safe to delete)`); } };
+    const leftover = [];
+    for (const a of aside) { try { rename(a.old, a.dest); } catch (e2) { leftover.push(a.old); } }
+    for (const p of placed) if (!aside.some((a) => a.dest === p && !leftover.includes(a.old))) tryRm(p);
+    for (const m of moves) tryRm(m.part);
+    if (leftover.length) e.leftover = leftover;
+    throw e;
+  }
+  for (const a of aside) {
+    try { rm(a.old, { force: true }); } catch (e) {
+      console.error(`warning: could not delete ${path.basename(a.old)}: ${e.message} (safe to delete)`);
+    }
+  }
+}
+
+// The refusal line for a failed placeAll.
+function refusalFor(e) {
+  const head = `${e.code ? `${e.code}: ` : ''}${e.message}`;
+  if (!e.leftover) return `${head}: nothing written`;
+  return `${head}: ${e.leftover.map((o) => `the old ${path.basename(o).replace(/\.\d+\.old$/, '')} is left at ${path.basename(o)}`).join(', ')}: rename it back`;
+}
+
 function zip({ pos, opt, flags }) {
   if (pos.length !== 2) usage(`usage: bundle.js zip <dir> <out.zip> [--post <post.md>] ${TERM_USAGE} [--allow-binary <name>]...`);
   const dir = path.resolve(pos[0]);
@@ -602,21 +663,22 @@ function zip({ pos, opt, flags }) {
   const problems = check(dir, opts);
   const post = opt.post ? readPost(opt.post, opts, dir) : null;
   if (post) problems.push(...post.problems);
+  // the post sits beside the zip as <zip name minus .zip>.post.md, byte for byte, never inside it
+  const postOut = `${out.replace(/\.zip$/i, '')}.post.md`;
+  if (!post && exists(postOut)) problems.push(`stale post beside the output: ${path.basename(postOut)}: delete it or pass --post`);
   if (problems.length) throw new Refused(problems);
   const { files } = listFiles(dir);
   const entries = files.map((f) => ({ name: `${top}/${f}`, data: fs.readFileSync(path.join(dir, ...f.split('/'))) }));
-  // the post sits beside the zip as <zip name minus .zip>.post.md, byte for byte, never inside it
-  const postOut = post ? `${out.replace(/\.zip$/i, '')}.post.md` : null;
   fs.mkdirSync(path.dirname(out), { recursive: true });
+  // all or nothing: both .part files first, then placeAll; a failure leaves the folder as it was
+  const moves = [{ part: `${out}.part`, dest: out }, ...(post ? [{ part: `${postOut}.part`, dest: postOut }] : [])];
   try {
     writeZip(entries, `${out}.part`);
     if (post) fs.writeFileSync(`${postOut}.part`, post.bytes);
-    fs.renameSync(`${out}.part`, out);
-    if (post) fs.renameSync(`${postOut}.part`, postOut);
+    placeAll(moves);
   } catch (e) {
-    fs.rmSync(`${out}.part`, { force: true });
-    if (post) fs.rmSync(`${postOut}.part`, { force: true });
-    throw new Refused([e.message]);
+    for (const m of moves) fs.rmSync(m.part, { force: true });
+    throw new Refused([refusalFor(e)]);
   }
   console.log(`wrote ${pos[1]} (${entries.length} files under ${top}/)`);
   if (post) console.log(`wrote ${path.basename(postOut)} beside it (the post)`);
@@ -630,7 +692,9 @@ function main(argv) {
   const [cmd, ...rest] = argv;
   try {
     if (!COMMANDS[cmd]) usage(`usage: node bundle.js <${Object.keys(COMMANDS).join('|')}> ...`);
-    COMMANDS[cmd](parseArgs(rest));
+    const args = parseArgs(rest);
+    if (args.opt.post !== undefined && cmd !== 'zip' && cmd !== 'check') usage('--post is only for zip and check (check-post takes the post as its argument)');
+    COMMANDS[cmd](args);
   } catch (e) {
     if (e instanceof Usage) {
       console.error(e.message);
@@ -644,6 +708,6 @@ function main(argv) {
   }
 }
 
-module.exports = { checkPost, POST_LIMIT };
+module.exports = { checkPost, POST_LIMIT, placeAll, refusalFor };
 
 if (require.main === module) main(process.argv.slice(2));

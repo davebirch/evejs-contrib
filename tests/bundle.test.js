@@ -669,3 +669,64 @@ test('zip: --post may come anywhere among the options, after --terms included', 
   assert.equal(r3.status, 0, r3.stdout + r3.stderr);
   assert.ok(fs.existsSync(path.join(d, 'out3', 'r.post.md')));
 });
+
+test('zip without --post refuses when a post already sits beside the output zip (it would be stale)', () => {
+  const { d, b } = goodBundle();
+  const out = path.join(d, 'out', 'r.zip');
+  put(d, 'out/r.post.md', POST);
+  const r = runNoId('zip', b, out);
+  assert.equal(r.status, 2);
+  assert.match(r.stdout, /refusing: stale post beside the output: r\.post\.md: delete it or pass --post/);
+  assert.ok(!fs.existsSync(out));
+  // with --post it is replaced
+  const post = path.join(d, 'draft.md');
+  fs.writeFileSync(post, POST.replace('Fleet', 'Wing'));
+  assert.equal(runNoId('zip', b, out, '--post', post).status, 0);
+  assert.equal(get(d, 'out/r.post.md'), POST.replace('Fleet', 'Wing'));
+});
+
+test('zip --post is all or nothing: if the post cannot be put in place, the new zip is removed too', () => {
+  const { d, b } = goodBundle();
+  const out = path.join(d, 'out', 'r.zip');
+  fs.mkdirSync(path.join(d, 'out', 'r.post.md'), { recursive: true }); // a folder where the post goes: its rename fails
+  const post = path.join(d, 'draft.md');
+  fs.writeFileSync(post, POST);
+  const r = runNoId('zip', b, out, '--post', post);
+  assert.equal(r.status, 2, r.stdout + r.stderr);
+  assert.match(r.stdout, /refusing: /);
+  assert.deepEqual(fs.readdirSync(path.join(d, 'out')), ['r.post.md']);
+});
+
+test('zip --post: the inside-the-bundle check uses real paths (a "..x.md" name is inside; case on macOS and Windows)', () => {
+  const { d, b } = goodBundle();
+  put(b, '..x.md', POST);
+  assert.equal(run('manifest', b).status, 0);
+  const r = runNoId('zip', b, path.join(d, 'r.zip'), '--post', path.join(b, '..x.md'));
+  assert.equal(r.status, 2);
+  assert.match(r.stdout, /refusing: \.\.x\.md: the post must be outside the bundle folder/);
+  // a symlinked path to the bundle is still the bundle
+  const link = path.join(d, 'link');
+  let linked = true;
+  try { fs.symlinkSync(b, link, 'junction'); } catch (e) { linked = false; }
+  if (linked) {
+    const r2 = runNoId('zip', b, path.join(d, 'r2.zip'), '--post', path.join(link, '..x.md'));
+    assert.equal(r2.status, 2);
+    assert.match(r2.stdout, /outside the bundle folder/);
+  }
+  if (process.platform === 'darwin' || process.platform === 'win32') {
+    const r3 = runNoId('zip', b, path.join(d, 'r3.zip'), '--post', path.join(path.dirname(b), path.basename(b).toUpperCase(), '..x.md'));
+    assert.equal(r3.status, 2);
+    assert.match(r3.stdout, /outside the bundle folder/);
+  }
+  // a sibling folder whose name starts with the bundle's is outside
+  put(d, 'bundle-notes/post.md', POST);
+  assert.equal(runNoId('zip', b, path.join(d, 'r4.zip'), '--post', path.join(d, 'bundle-notes', 'post.md')).status, 0);
+});
+
+test('zip --post: a refusal from a failed move names any old file it could not put back', () => {
+  // the message format only: placeAll's own tests cover the moves
+  const { refusalFor } = require('../skills/upstream-report/scripts/bundle.js');
+  const e = Object.assign(new Error('locked'), { code: 'EPERM', leftover: ['/x/r.zip.7.old'] });
+  assert.equal(refusalFor(e), 'EPERM: locked: the old r.zip is left at r.zip.7.old: rename it back');
+  assert.equal(refusalFor(Object.assign(new Error('locked'), { code: 'EPERM' })), 'EPERM: locked: nothing written');
+});

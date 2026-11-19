@@ -172,15 +172,22 @@ test('hygiene: the hashed wording check still fires', () => {
   } finally { fs.rmSync(tmp, { force: true }); }
 });
 
-test('each skill gives an example Discord post, and it passes check-post', () => {
+test('each skill gives an example Discord post, and it passes check-post with the built-in checks and your identity', () => {
   const { checkPost, POST_LIMIT } = require('../skills/upstream-report/scripts/bundle.js');
+  const { identityTerms } = require('../skills/upstream-report/scripts/leak-scan.js');
+  // not your personal leak-terms file: the result must not depend on whoever runs the tests
+  const opts = { identity: identityTerms() };
   for (const name of ['upstream-report', 'upstream-report-perf']) {
     const text = fs.readFileSync(path.join(skillsDir, name, 'SKILL.md'), 'utf8').replace(/\r\n/g, '\n');
     const m = /^( *)````markdown\n([\s\S]*?)\n\1````$/m.exec(text);
     assert.ok(m, `${name}: no \`\`\`\`markdown example post`);
     const post = m[2].split('\n').map((l) => l.slice(m[1].length)).join('\n');
-    assert.deepEqual(checkPost(post), [], `${name}: the example post fails check-post`);
+    assert.deepEqual(checkPost(post, opts), [], `${name}: the example post fails check-post`);
     assert.ok([...post.trim()].length < POST_LIMIT / 2, `${name}: the example should be short`);
     assert.match(post, /attached zip/, `${name}: the example ends by pointing at the zip`);
   }
+});
+
+test('no CLAUDE.md at the plugin root (claude plugin validate --strict warns; it lives in .claude/)', () => {
+  assert.ok(!fs.existsSync(path.join(root, 'CLAUDE.md')), 'move CLAUDE.md to .claude/CLAUDE.md');
 });

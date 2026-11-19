@@ -83,13 +83,13 @@ Beside the zip, never inside it: `<zip name minus .zip>.post.md`, the condensed 
    - If the evidence doesn't link the logged error to the fix, say so in `BUG-REPORT.md` and list it under
      the handoff's open questions; don't claim a cause the evidence doesn't show.
 7. **Write the Discord post** in a file outside the bundle folder (for example `<bundle>-post.md`),
-   from BUG-REPORT.md. It is the message a person pastes into the EveJS Discord with the zip attached.
+   from BUG-REPORT.md, saved as UTF-8 (write it with your file tool, never with a PowerShell `>`). It is the message a person pastes into the EveJS Discord with the zip attached.
    Discord shows tables as raw pipes, caps a message at 2,000 characters and can't open links into a zip:
    - **In:** the title as a bold line; what's wrong and its impact in 2–3 sentences; the fix in one
      sentence; the headline evidence (one log line, or for performance the 2–4 key before/after
      figures); last, "Full report, patch, tests and evidence in the attached zip."
    - **Out:** tables (except a small one in a code block: at most 8 lines of 60 characters), links into
-     the zip (name a file as `code` instead), images.
+     the zip (name a file as `code` instead), images, `~~~` fences (Discord renders only ``` ones).
    - **One message:** at most 1,900 characters. Only if the essentials can't fit, split it with a line
      that is exactly `--- part 2/2 ---`, keep each part within 1,900, and tell the user why.
    - Check it with `node <skill>/scripts/bundle.js check-post <post>` (same leak terms and options as
@@ -116,6 +116,7 @@ Beside the zip, never inside it: `<zip name minus .zip>.post.md`, the condensed 
 9. **Zip.** `node <skill>/scripts/bundle.js zip <bundle> <out>.zip --post <post>` re-runs `check` and
    `check-post`, writes one top folder, and copies the post beside the zip as `<out>.post.md`. As a last
    look: `node <skill>/scripts/leak-scan.js <out>.zip <out>.post.md`.
+   An interrupted zip may leave `<name>.<number>.old` files beside the output: they are safe to delete.
 10. **Hand over.** Tell the user the zip path and that `<out>.post.md` is the text to post, with the zip
     attached (BUG-REPORT.md inside it is the full report). If the post has two parts, say why. You
     prepare; a person posts it. Post nothing, anywhere.
