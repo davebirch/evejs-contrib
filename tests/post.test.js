@@ -71,7 +71,6 @@ test('a pipe table outside a code block fails; the same table inside one passes'
   fails(`${HEAD}\n\n${table}${TAIL}`, /line 5: table outside a code block/);
   fails(`${HEAD}\n\nMetric | Before\n--- | ---\ntick | 12\n${TAIL}`, /table/);
   ok(`${HEAD}\n\n\`\`\`\n${table}\`\`\`\n${TAIL}`);
-  ok(`${HEAD}\n\n~~~text\n${table}~~~\n${TAIL}`);
 });
 
 test('a table in a code block must stay small: at most 8 lines of at most 60 characters', () => {
@@ -143,4 +142,62 @@ test('check-post: --terms adds a terms file, --allow lifts a term', () => {
   assert.equal(r.status, 2);
   assert.match(r.stdout, /refusing: leak: x\.post\.md:3: gizmo/);
   assert.equal(run('check-post', p, '--terms', path.join(d, 'terms'), '--allow', 'gizmo').status, 0);
+});
+
+test('a closing fence may be followed by whitespace: a marker after it still splits the post', () => {
+  const post = `${HEAD}\n\n\`\`\`\ncode\n\`\`\`   \n${TAIL}--- part 2/2 ---\n${sized(500)}`;
+  ok(post);
+  fails(`${HEAD}\n\n\`\`\`\ncode\n\`\`\`   \n${TAIL}--- part 2/3 ---\n${sized(500)}`, /2 parts/);
+});
+
+test('marker numbers have no leading zeros', () => {
+  fails(`${sized(500)}--- part 02/2 ---\n${sized(500)}`, /line \d+: malformed part marker/);
+  fails(`${sized(500)}--- part 2/02 ---\n${sized(500)}`, /malformed part marker/);
+  fails(`${sized(500)}--- part 0/2 ---\n${sized(500)}`, /malformed part marker/);
+});
+
+test('~~~ fences are refused: Discord renders only backtick code blocks', () => {
+  const table = '| Metric | Before | After |\n|---|---|---|\n| tick p50 | 12 ms | 4 ms |\n';
+  fails(`${HEAD}\n\n~~~text\n${table}~~~\n${TAIL}`, /line 5: use ``` fences: Discord doesn't render ~~~/);
+  // still a fence for splitting: a marker inside it is text, so only the fence problem is reported
+  const p = checkPost(`${HEAD}\n\n~~~\n--- part 2/2 ---\n~~~\n${TAIL}`);
+  assert.deepEqual(p.map((x) => x.replace(/^post: line \d+: /, '')), ["use ``` fences: Discord doesn't render ~~~"]);
+});
+
+test('a one-line ```code``` span does not open a code block', () => {
+  ok(`${HEAD}\n\n\`\`\`x = 1\`\`\`\n${TAIL}`);
+  ok(`${HEAD}\n\n\`\`\`js\nconst a = 1;\n\`\`\`\n${TAIL}`);
+  fails(`${HEAD}\n\n\`\`\`js\nnot closed\n${TAIL}`, /unclosed code block/);
+});
+
+test('check-post: a post must be UTF-8 (a UTF-8 BOM is fine) and at most 64 KiB', () => {
+  const d = tmp();
+  const f = (name, bytes) => { const p = path.join(d, name); fs.writeFileSync(p, bytes); return p; };
+  const text = sized(500);
+  assert.equal(run('check-post', f('bom.md', Buffer.concat([Buffer.from([0xef, 0xbb, 0xbf]), Buffer.from(text)]))).status, 0);
+  const le = run('check-post', f('le.md', Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from(text, 'utf16le')])));
+  assert.equal(le.status, 2);
+  assert.match(le.stdout, /refusing: le\.md: is UTF-16: save it as UTF-8/);
+  const be = Buffer.from(text, 'utf16le').swap16();
+  assert.match(run('check-post', f('be.md', Buffer.concat([Buffer.from([0xfe, 0xff]), be]))).stdout, /be\.md: is UTF-16/);
+  const latin = run('check-post', f('latin.md', Buffer.from(`${HEAD}caf\xe9${TAIL}`, 'latin1')));
+  assert.equal(latin.status, 2);
+  assert.match(latin.stdout, /refusing: latin\.md: not valid UTF-8: save it as UTF-8/);
+  const big = run('check-post', f('big.md', Buffer.from(text + ' '.repeat(65537 - Buffer.byteLength(text)))));
+  assert.equal(big.status, 2);
+  assert.match(big.stdout, /refusing: big\.md: is 65537 bytes \(limit 65536, 64 KiB\)/);
+  const edge = run('check-post', f('edge.md', Buffer.from(text + ' '.repeat(65536 - Buffer.byteLength(text)))));
+  assert.equal(edge.status, 0, edge.stdout);
+});
+
+test('--post is a usage error on commands other than zip and check', () => {
+  const d = tmp();
+  const p = path.join(d, 'x.post.md');
+  fs.writeFileSync(p, sized(500));
+  const r = run('check-post', p, '--post', p);
+  assert.equal(r.status, 64);
+  assert.match(r.stderr, /--post is only for zip and check/);
+  assert.equal(run('manifest', d, '--post', p).status, 64);
+  assert.equal(run('init', path.join(d, 'n'), '--area', 'a', '--version', 'v', '--post', p).status, 64);
+  assert.ok(!fs.existsSync(path.join(d, 'n')));
 });

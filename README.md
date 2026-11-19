@@ -43,7 +43,7 @@ Two files, side by side:
   files, the tests, a developer handoff and upstream's own error report (redacted), with checksums.
 - `<name>.post.md`: a condensed post to paste into the EveJS Discord with the zip attached: one message of
   at most 1,900 characters (Discord's limit is 2,000), with no links into the zip, no images and no tables
-  (except a small one in a code block).
+  (except a small one in a code block), saved as UTF-8 and at most 64 KiB.
   `bundle.js check-post` checks it, and `bundle.js zip <dir> <name>.zip --post <post>` writes it beside the
   zip; both use the same leak scan as the bundle.
 
