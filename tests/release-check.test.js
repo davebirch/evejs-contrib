@@ -45,24 +45,19 @@ function setup() {
   const log = path.join(base, 'calls.log');
   const ghJs = path.join(base, 'fake-gh.js');
   const claudeJs = path.join(base, 'fake-claude.js');
-  const testJs = path.join(base, 'fake-test.js');
   fs.writeFileSync(ghJs, FAKE('gh'));
   fs.writeFileSync(claudeJs, FAKE('claude'));
-  fs.writeFileSync(testJs, FAKE('tests'));
   const env = {
     ...cleanEnv(),
     FAKE_LOG: log,
     EVEJS_CONTRIB_GH: ghJs,
-    EVEJS_CONTRIB_TEST_NO_REMOTE_CHECK: '1', // the fixture's remote is a local bare repo, not <owner>/<repo>
     EVEJS_CONTRIB_CLAUDE: claudeJs,
-    EVEJS_CONTRIB_TEST: testJs,
     EVEJS_CONTRIB_CONFIG_DIR: path.join(base, 'config'),
   };
   const calls = () => (fs.existsSync(log) ? fs.readFileSync(log, 'utf8').trim().split('\n').filter(Boolean).map((l) => JSON.parse(l)) : []);
   const run = (...args) => spawnSync(process.execPath, [path.join(repo, 'scripts', 'release-check.js'), ...args], { cwd: repo, encoding: 'utf8', env });
   return { base, repo, remote, calls, run, env };
 }
-const versionIn = (repo) => JSON.parse(fs.readFileSync(path.join(repo, '.claude-plugin', 'plugin.json'), 'utf8')).version;
 
 test('parseArgs', () => {
   assert.deepEqual(parseArgs([]), { terms: null, skipSmoke: false, skipValidate: false });

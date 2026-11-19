@@ -38,7 +38,7 @@ function findOnWindowsPath(name, env) {
 const bin = (name, fallback, env, platform = process.platform) => {
   const v = env[name];
   if (v) return v.toLowerCase().endsWith('.js') ? { cmd: process.execPath, pre: [v] } : { cmd: v, pre: [] };
-  if (platform === 'win32' && ['claude', 'npm'].includes(fallback)) {
+  if (platform === 'win32' && fallback === 'claude') {
     const f = findOnWindowsPath(fallback, env);
     if (f) return { cmd: f, pre: [], shim: f.toLowerCase().endsWith('.cmd') };
   }
@@ -60,11 +60,9 @@ function makeRunner(env) {
     const r = b.shim
       ? spawnSync('cmd.exe', ['/d', '/s', '/c', winCmdLine([b.cmd, ...b.pre, ...args])], { ...spawnOpts, windowsVerbatimArguments: true })
       : spawnSync(b.cmd, [...b.pre, ...args], spawnOpts);
-    return { status: r.error ? 127 : r.status, out: (r.stdout || '') + (r.stderr || ''), stdout: r.stdout || '', missing: Boolean(r.error && r.error.code === 'ENOENT') };
+    return { status: r.error ? 127 : r.status, out: (r.stdout || '') + (r.stderr || ''), stdout: r.stdout || '' };
   };
 }
-
-const show = (b, args) => [b.cmd, ...b.pre, ...args].join(' ').replace(process.execPath, 'node');
 
 function parseArgs(argv) {
   const o = { terms: null, skipSmoke: false, skipValidate: false };

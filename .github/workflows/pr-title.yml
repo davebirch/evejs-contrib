@@ -19,6 +19,12 @@ jobs:
             fix
             chore
             docs
+            test
+            refactor
+            ci
+            perf
+            build
+            revert
           # a "!" after the type marks a breaking change, e.g. "feat!: ..."
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

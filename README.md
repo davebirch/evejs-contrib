@@ -87,8 +87,8 @@ reads it to choose the next version, so the title must follow conventional commi
 
 - `feat: ...` a new feature (minor bump)
 - `fix: ...` a bug fix (patch bump)
-- `docs: ...`, `chore: ...` no release on their own
-- a `!` after the type (`feat!: ...`) marks a breaking change
+- `docs:`, `chore:`, `test:`, `refactor:`, `ci:`, `perf:`, `build:`, `revert:` no release on their own
+- a `!` after the type (`feat!: ...`) marks a breaking change (while the version is below 1.0 it bumps the minor)
 
 Never edit the version by hand: it lives only in `.claude-plugin/plugin.json` and `package.json`, and
 release-please keeps them equal.
@@ -98,8 +98,9 @@ release-please keeps them equal.
 Releases happen by merging the release PR. On every push to `main`, release-please opens or updates a PR that
 bumps both versions and writes `CHANGELOG.md`. Merging it tags `v<version>`, creates the GitHub release and
 attaches the zip (built by `scripts/build-zip.js`, both layouts). Pull requests opened with the default
-`GITHUB_TOKEN` do not start the test workflow; add a `RELEASE_PLEASE_TOKEN` repository secret if you want the tests
-to run on the release PR itself.
+`GITHUB_TOKEN` do not start the test workflow, and only exist if the repository setting "Allow GitHub Actions to
+create and approve pull requests" is on; a `RELEASE_PLEASE_TOKEN` repository secret (contents, issues and pull
+requests write) avoids both. Use squash merges only, so the checked PR title becomes the commit message.
 
 Users pick up a release with:
 
@@ -107,8 +108,8 @@ Users pick up a release with:
 claude plugin update evejs-contrib@evejs-contrib
 ```
 
-Before merging a release PR you can run the local checks (strict plugin validation, a headless smoke test, and a
-leak scan of the whole tracked tree); it never bumps, tags, pushes or publishes:
+Before merging a release PR you can run the local checks (a leak scan of the whole tracked tree, strict plugin
+validation and a headless smoke test); it never bumps, tags, pushes or publishes:
 
 ```
 npm run release-check -- [--terms <file>] [--skip-smoke] [--skip-validate]

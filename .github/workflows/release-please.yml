@@ -9,7 +9,10 @@ on:
 
 permissions:
   contents: write
+  issues: write
   pull-requests: write
+
+concurrency: release-please
 
 jobs:
   release-please:
@@ -23,9 +26,10 @@ jobs:
         with:
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
-          # Pull requests opened with the default token do not start the test workflow. To have the tests run on
-          # the release PR, add a repository secret RELEASE_PLEASE_TOKEN (a token that can write contents and
-          # pull requests); without it the default token is used.
+          # The default token can open the release PR only if the repository setting "Allow GitHub Actions to
+          # create and approve pull requests" is on, and PRs it opens do not start the test workflow. A
+          # repository secret RELEASE_PLEASE_TOKEN (contents, issues and pull requests write) fixes both;
+          # without it the default token is used.
           token: ${{ secrets.RELEASE_PLEASE_TOKEN || secrets.GITHUB_TOKEN }}
 
   zip:
