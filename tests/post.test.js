@@ -209,8 +209,8 @@ test('a one-line ```code``` span is not a fence: a marker after it still splits 
 
 test('a ``` line with a backtick later in it, that is not a one-line span, gets a clear message', () => {
   const p = checkPost(`${HEAD}\n\n\`\`\`js \`a\`\nconst a = 1;\n\`\`\`\n${TAIL}`);
-  assert.ok(p.some((x) => /line 5: a ``` fence's opening line can't contain another backtick/.test(x)), JSON.stringify(p));
-  assert.ok(!p.some((x) => /table/.test(x)), JSON.stringify(p));
+  assert.equal(p.length, 1, JSON.stringify(p)); // no spurious "unclosed code block" from the closing fence
+  assert.match(p[0], /line 5: a ``` fence's opening line can't contain another backtick/);
 });
 
 test('placeAll: all or nothing, and a failed move restores the files it replaced', () => {
@@ -219,7 +219,7 @@ test('placeAll: all or nothing, and a failed move restores the files it replaced
   const zip = path.join(d, 'r.zip'), post = path.join(d, 'r.post.md');
   f('r.zip', 'old zip'); f('r.post.md', 'old post');
   f('r.zip.part', 'new zip'); f('r.post.md.part', 'new post');
-  const failing = (from, to) => { if (to === post) { const e = new Error('locked'); e.code = 'EPERM'; throw e; } fs.renameSync(from, to); };
+  const failing = (from, to) => { if (to === post && from.endsWith('.part')) { const e = new Error('locked'); e.code = 'EPERM'; throw e; } fs.renameSync(from, to); };
   assert.throws(() => placeAll([{ part: `${zip}.part`, dest: zip }, { part: `${post}.part`, dest: post }], { rename: failing }), /locked/);
   assert.equal(fs.readFileSync(zip, 'utf8'), 'old zip');
   assert.equal(fs.readFileSync(post, 'utf8'), 'old post');
@@ -236,4 +236,56 @@ test('placeAll: all or nothing, and a failed move restores the files it replaced
   assert.equal(fs.readFileSync(zip, 'utf8'), 'new zip');
   assert.equal(fs.readFileSync(post, 'utf8'), 'new post');
   assert.deepEqual(fs.readdirSync(d).sort(), ['r.post.md', 'r.zip']);
+});
+
+test('a line that starts with a one-line span and goes on is prose, not a bad fence', () => {
+  ok(`${HEAD}\n\n\`\`\`x\`\`\` and more\n${TAIL}`);
+  ok(`${HEAD}\n\n\`\`\`a\`b\`\`\` then text\n${TAIL}`);
+  // a run of a different length does not close it
+  const p = checkPost(`${HEAD}\n\n\`\`\`x\`\` y\ncode\n\`\`\`\n${TAIL}`);
+  assert.equal(p.length, 1, JSON.stringify(p));
+  assert.match(p[0], /line 5: a ``` fence's opening line/);
+});
+
+test('placeAll: a failure while setting the old files aside puts back the ones already moved', () => {
+  const d = tmp();
+  const f = (n, t) => { fs.writeFileSync(path.join(d, n), t); return path.join(d, n); };
+  const zip = f('r.zip', 'old zip'), post = f('r.post.md', 'old post');
+  f('r.zip.part', 'new zip'); f('r.post.md.part', 'new post');
+  const failing = (from, to) => { if (from === post) { const e = new Error('busy'); e.code = 'EBUSY'; throw e; } fs.renameSync(from, to); };
+  assert.throws(() => placeAll([{ part: `${zip}.part`, dest: zip }, { part: `${post}.part`, dest: post }], { rename: failing }), /busy/);
+  assert.equal(fs.readFileSync(zip, 'utf8'), 'old zip');
+  assert.equal(fs.readFileSync(post, 'utf8'), 'old post');
+  assert.deepEqual(fs.readdirSync(d).sort(), ['r.post.md', 'r.zip']);
+});
+
+test('placeAll: a restore that fails is named in the error, with the file it left behind', () => {
+  const d = tmp();
+  const f = (n, t) => { fs.writeFileSync(path.join(d, n), t); return path.join(d, n); };
+  const zip = f('r.zip', 'old zip'), post = f('r.post.md', 'old post');
+  f('r.zip.part', 'new zip'); f('r.post.md.part', 'new post');
+  const failing = (from, to) => {
+    if ((to === post && from.endsWith('.part')) || (to === zip && /\.old$/.test(from))) { const e = new Error('locked'); e.code = 'EPERM'; throw e; }
+    fs.renameSync(from, to);
+  };
+  let err;
+  try { placeAll([{ part: `${zip}.part`, dest: zip }, { part: `${post}.part`, dest: post }], { rename: failing }); } catch (e) { err = e; }
+  assert.ok(err);
+  assert.deepEqual(err.leftover.map((x) => path.basename(x)), [`r.zip.${process.pid}.old`]);
+  assert.equal(fs.readFileSync(path.join(d, `r.zip.${process.pid}.old`), 'utf8'), 'old zip');
+  assert.equal(fs.readFileSync(post, 'utf8'), 'old post');
+});
+
+test('placeAll: failing to delete a set-aside copy after success only warns', (t) => {
+  const d = tmp();
+  const f = (n, t2) => { fs.writeFileSync(path.join(d, n), t2); return path.join(d, n); };
+  const zip = f('r.zip', 'old zip');
+  f('r.zip.part', 'new zip');
+  const warnings = [];
+  t.mock.method(console, 'error', (m) => warnings.push(m));
+  const rm = (p, o) => { if (/\.old$/.test(p)) throw new Error('in use'); fs.rmSync(p, o); };
+  placeAll([{ part: `${zip}.part`, dest: zip }], { rm });
+  assert.equal(fs.readFileSync(zip, 'utf8'), 'new zip');
+  assert.equal(warnings.length, 1);
+  assert.match(warnings[0], /warning: could not delete r\.zip\.\d+\.old: in use \(safe to delete\)/);
 });

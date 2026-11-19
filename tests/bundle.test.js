@@ -722,3 +722,11 @@ test('zip --post: the inside-the-bundle check uses real paths (a "..x.md" name i
   put(d, 'bundle-notes/post.md', POST);
   assert.equal(runNoId('zip', b, path.join(d, 'r4.zip'), '--post', path.join(d, 'bundle-notes', 'post.md')).status, 0);
 });
+
+test('zip --post: a refusal from a failed move names any old file it could not put back', () => {
+  // the message format only: placeAll's own tests cover the moves
+  const { refusalFor } = require('../skills/upstream-report/scripts/bundle.js');
+  const e = Object.assign(new Error('locked'), { code: 'EPERM', leftover: ['/x/r.zip.7.old'] });
+  assert.equal(refusalFor(e), 'EPERM: locked: the old r.zip is left at r.zip.7.old: rename it back');
+  assert.equal(refusalFor(Object.assign(new Error('locked'), { code: 'EPERM' })), 'EPERM: locked: nothing written');
+});

@@ -116,6 +116,7 @@ Beside the zip, never inside it: `<zip name minus .zip>.post.md`, the condensed 
 9. **Zip.** `node <skill>/scripts/bundle.js zip <bundle> <out>.zip --post <post>` re-runs `check` and
    `check-post`, writes one top folder, and copies the post beside the zip as `<out>.post.md`. As a last
    look: `node <skill>/scripts/leak-scan.js <out>.zip <out>.post.md`.
+   An interrupted zip may leave `<name>.<number>.old` files beside the output: they are safe to delete.
 10. **Hand over.** Tell the user the zip path and that `<out>.post.md` is the text to post, with the zip
     attached (BUG-REPORT.md inside it is the full report). If the post has two parts, say why. You
     prepare; a person posts it. Post nothing, anywhere.

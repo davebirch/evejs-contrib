@@ -472,8 +472,15 @@ function checkPost(text, { name = 'post', terms = { terms: [], names: [], identi
   let firstText = lines.findIndex((l) => l.trim());
   lines.forEach((line, i) => {
     const n = i + 1;
-    // a fence: at most 3 spaces, then 3+ backticks (whose info has no backtick: ```x``` is a code span) or tildes
-    const f = /^ {0,3}(`{3,}(?=[^`]*$)|~{3,})/.exec(line);
+    // a fence: at most 3 spaces, then 3+ backticks or tildes. A backtick line whose rest holds a run of the
+    // same length is a one-line code span (```x``` and more), not a fence; any other backtick in the rest
+    // is refused, but the line still opens the block its author meant.
+    let f = /^ {0,3}(`{3,}|~{3,})/.exec(line);
+    if (f && !fence && f[1][0] === '`') {
+      const rest = line.slice(f[0].length);
+      if (new RegExp(`(?<!\`)${f[1]}(?!\`)`).test(rest)) f = null;
+      else if (rest.includes('`')) say(`line ${n}: a \`\`\` fence's opening line can't contain another backtick (no backticks in the language name; a one-line span ends with \`\`\`)`);
+    }
     if (fence) {
       fenced[i] = true;
       if (f && f[1][0] === fence[0] && f[1].length >= fence.length && !line.slice(f[0].length).trim()) { fence = null; closeBlock(); }
@@ -494,10 +501,6 @@ function checkPost(text, { name = 'post', terms = { terms: [], names: [], identi
       markers.push({ n, part: Number(m[1]), of: Number(m[2]), first: i === firstText });
       if (i !== firstText) parts.push([]);
       return;
-    }
-    const ticks = /^ {0,3}(`{3,})/.exec(line);
-    if (ticks && !new RegExp(`${ticks[1]}\\s*$`).test(line.slice(ticks[0].length))) {
-      say(`line ${n}: a \`\`\` fence's opening line can't contain another backtick (no backticks in the language name; a one-line span ends with \`\`\`)`);
     }
     if (/^\s*-{2,}\s*part\b/i.test(line)) say(`line ${n}: malformed part marker (write exactly "--- part n/m ---")`);
     parts[parts.length - 1].push(line);
@@ -606,9 +609,11 @@ function runCheckPost({ pos, opt, flags }) {
   console.log('post check passed');
 }
 
-// Renames each part onto its dest as one step: existing dests are set aside first, and if any rename fails the
-// placed files are removed, the old ones put back and the parts deleted, then the error is thrown on.
-function placeAll(moves, { rename = fs.renameSync } = {}) {
+// Renames each part onto its dest as one step: existing dests are set aside first (as <dest>.<pid>.old), and if
+// any rename fails the placed files are removed, the old ones put back and the parts deleted, then the error is
+// thrown on, with e.leftover listing any old file that could not be put back. Deleting the set-aside copies
+// after success only warns when it fails.
+function placeAll(moves, { rename = fs.renameSync, rm = fs.rmSync } = {}) {
   for (const m of moves) {
     if (exists(m.dest) && !fs.lstatSync(m.dest).isFile()) throw new Error(`not a regular file: ${path.basename(m.dest)}`);
   }
@@ -622,12 +627,25 @@ function placeAll(moves, { rename = fs.renameSync } = {}) {
     }
     for (const m of moves) { rename(m.part, m.dest); placed.push(m.dest); }
   } catch (e) {
-    for (const p of placed) fs.rmSync(p, { force: true });
-    for (const a of aside) { try { fs.renameSync(a.old, a.dest); } catch (e2) { /* the old file stays at <dest>.<pid>.old */ } }
-    for (const m of moves) fs.rmSync(m.part, { force: true });
+    for (const p of placed) rm(p, { force: true });
+    const leftover = [];
+    for (const a of aside) { try { rename(a.old, a.dest); } catch (e2) { leftover.push(a.old); } }
+    for (const m of moves) rm(m.part, { force: true });
+    if (leftover.length) e.leftover = leftover;
     throw e;
   }
-  for (const a of aside) fs.rmSync(a.old, { force: true });
+  for (const a of aside) {
+    try { rm(a.old, { force: true }); } catch (e) {
+      console.error(`warning: could not delete ${path.basename(a.old)}: ${e.message} (safe to delete)`);
+    }
+  }
+}
+
+// The refusal line for a failed placeAll.
+function refusalFor(e) {
+  const head = `${e.code ? `${e.code}: ` : ''}${e.message}`;
+  if (!e.leftover) return `${head}: nothing written`;
+  return `${head}: ${e.leftover.map((o) => `the old ${path.basename(o).replace(/\.\d+\.old$/, '')} is left at ${path.basename(o)}`).join(', ')}: rename it back`;
 }
 
 function zip({ pos, opt, flags }) {
@@ -657,7 +675,7 @@ function zip({ pos, opt, flags }) {
     placeAll(moves);
   } catch (e) {
     for (const m of moves) fs.rmSync(m.part, { force: true });
-    throw new Refused([`${e.code ? `${e.code}: ` : ''}${e.message}: nothing written`]);
+    throw new Refused([refusalFor(e)]);
   }
   console.log(`wrote ${pos[1]} (${entries.length} files under ${top}/)`);
   if (post) console.log(`wrote ${path.basename(postOut)} beside it (the post)`);
@@ -687,6 +705,6 @@ function main(argv) {
   }
 }
 
-module.exports = { checkPost, POST_LIMIT, placeAll };
+module.exports = { checkPost, POST_LIMIT, placeAll, refusalFor };
 
 if (require.main === module) main(process.argv.slice(2));
