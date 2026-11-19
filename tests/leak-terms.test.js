@@ -119,7 +119,9 @@ test('edit reports a failed editor with a non-zero exit', () => {
   const e = { ...process.env, EVEJS_CONTRIB_CONFIG_DIR: tmp(), EDITOR: 'no-such-editor-binary-xyz' };
   const r = spawnSync(process.execPath, [SCRIPT, 'edit'], { encoding: 'utf8', env: e });
   assert.notEqual(r.status, 0);
-  assert.match(r.stderr, /could not run editor/);
+  // On Windows the bare name is retried through cmd.exe (so code.cmd works), which then reports the missing
+  // command itself and exits non-zero; elsewhere we print our own message.
+  assert.match(r.stderr, process.platform === 'win32' ? /not recognized|could not run editor/ : /could not run editor/);
 });
 
 test('editorSpawn: .cmd/.bat editors on Windows go through a quoted shell command; others do not', () => {

@@ -34,7 +34,7 @@ function setup() {
     fs.cpSync(path.join(REPO, f), path.join(repo, f), { recursive: true });
   }
   const remote = path.join(base, 'remote.git');
-  git(base, 'init', '-q', '--bare', remote);
+  git(base, 'init', '-q', '--bare', '-b', 'main', remote);
   git(repo, 'init', '-q', '-b', 'main');
   git(repo, 'config', 'user.name', 'Release Test');
   git(repo, 'config', 'user.email', 'release-test@users.noreply.github.com');
