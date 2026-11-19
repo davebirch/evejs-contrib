@@ -88,6 +88,8 @@ times and upstream's own part labels), then describe the runs:
   `loop_delay_max_ms`, `cpu_mean_pct` (from the per-second samples). Percentiles are nearest-rank.
 - `repeats.<side>.<step>`: `runs` (how many) and, for each stat above, `{median, min, max}` across the
   repeats; only when a side has 2 or more repeats of that step.
+- A repeat whose mean, p50 or p99 is over 1.5 times its repeats' median (and 1 ms or more above it)
+  prints an `outlier:` warning naming the run, side, step and stat: explain it or list it as open.
 - A key the data can't give (no samples, no lateness, no subsystem) is absent, never null.
 
 Report the repeats' **median with its spread** (`9.3 (8.9–9.5)`) for means and p50s, and the soak for

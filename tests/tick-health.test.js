@@ -105,6 +105,19 @@ test('repeats: median and spread per side and step; a soak is kept out of them',
   assert.equal(th.runs.soak.before.load.tick_p99_ms, 100);
 });
 
+test('repeats: a run far above its repeats is warned about as an outlier, naming run, side, step and stat', () => {
+  const files = {};
+  const runs = [];
+  [[2, 2, 2], [2, 2, 2], [2, 2, 40]].forEach((d, i) => {
+    files[`r${i + 1}.jsonl`] = ticks(T0, d);
+    runs.push(run(`r${i + 1}`, 'after', `r${i + 1}.jsonl`, [step('idle', T0, 300)]));
+  });
+  const r = metrics(evidence(runs, files));
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stderr, /outlier: run "r3" after step "idle" tick_p99_ms 40 against a median of 2/);
+  assert.doesNotMatch(r.stderr, /outlier: run "r1"/);
+});
+
 test('one run per side gives no repeats key', () => {
   const ev = evidence([run('r1', 'before', 'a.jsonl', [step('s', T0, 300)]), run('r1', 'after', 'a.jsonl', [step('s', T0, 300)])], { 'a.jsonl': ticks(T0, [1, 2, 3]) });
   assert.ok(!('repeats' in out(ev).tick_health));

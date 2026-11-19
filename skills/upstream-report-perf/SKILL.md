@@ -76,7 +76,8 @@ Use `upstream-report` step 5's names file (every character in the logs, one per 
    label) as `references/tick-health.md` shows.
 3. Copy `<skill>/scripts/health-metrics.js` to `<bundle>/evidence/recompute.js` (a reviewer runs it from
    the bundle; never write your own script for numbers it computes). Run
-   `node <bundle>/evidence/recompute.js <bundle>/evidence`, read the warnings, and save its output with
+   `node <bundle>/evidence/recompute.js <bundle>/evidence`, read the warnings (each `outlier:` line is an
+   anomaly the write-up explains or lists), and save its output with
    `--write <bundle>/evidence/expected.json` (no shell redirection: PowerShell 5.1 would write UTF-16).
    Then `node <bundle>/evidence/recompute.js <bundle>/evidence --check` must exit 0. It runs on the
    redacted files; say so in the comparison. Re-run it after any change to the evidence.

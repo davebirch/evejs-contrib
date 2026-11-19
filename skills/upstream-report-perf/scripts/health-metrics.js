@@ -145,7 +145,8 @@ function summarise(dir, side, win) {
 // mean/p50/p95/p99/max (nearest rank; a tick without the subsystem's label counts 0 ms, as upstream
 // leaves zero labels out), lateness, ticks of 100 ms or more and 250 ms or more (and per minute), event
 // loop delay and CPU from the samples. Keys a run did not measure are left out, never null. Across the
-// repeats of a side (kind "repeat", 2 or more runs with that step): each stat's median, min and max.
+// repeats of a side (kind "repeat", 2 or more runs with that step): each stat's median, min and max; a
+// repeat whose mean, p50 or p99 is over 1.5 times the median (and 1 ms or more above it) is warned about.
 const round2 = (x) => Math.round(x * 100) / 100;
 const nearest = (sorted, q) => sorted[Math.ceil(sorted.length * q) - 1];
 const mean = (xs) => xs.reduce((a, b) => a + b, 0) / xs.length;
@@ -258,11 +259,20 @@ function tickHealth(thDir) {
   }
   // Across repeats: per side and step, each stat's median and spread.
   for (const side of SIDES) {
-    const bySide = Object.values(result.runs).filter((run) => run.kind !== 'soak' && run[side]).map((run) => run[side]);
-    const steps = [...new Set(bySide.flatMap((s) => Object.keys(s)))];
+    const bySide = Object.entries(result.runs).filter(([, run]) => run.kind !== 'soak' && run[side]).map(([name, run]) => [name, run[side]]);
+    const steps = [...new Set(bySide.flatMap(([, s]) => Object.keys(s)))];
     for (const step of steps) {
-      const reps = bySide.map((s) => s[step]).filter(Boolean);
+      const named = bySide.filter(([, s]) => s[step]).map(([name, s]) => [name, s[step]]);
+      const reps = named.map(([, x]) => x);
       if (reps.length < 2) continue;
+      // A repeat far above the others is an anomaly the write-up must explain or list.
+      for (const key of ['tick_mean_ms', 'tick_p50_ms', 'tick_p99_ms', 'sub_mean_ms', 'sub_p50_ms', 'sub_p99_ms']) {
+        if (!reps.every((x) => isNum(x[key]))) continue;
+        const med = median(reps.map((x) => x[key]));
+        for (const [name, x] of named) {
+          if (x[key] > med * 1.5 && x[key] - med >= 1) warnings.push(`outlier: run "${name}" ${side} step "${step}" ${key} ${x[key]} against a median of ${round2(med)} across its repeats: explain it or list it as an open question`);
+        }
+      }
       const agg = { runs: reps.length };
       for (const key of Object.keys(reps[0])) {
         if (key === 'ticks' || key === 'samples') continue;
