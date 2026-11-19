@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.3.0](https://github.com/davebirch/evejs-contrib/compare/v0.2.0...v0.3.0) (2026-11-19)
+
+
+### Features
+
+* Discord-ready post beside the bundle zip ([#7](https://github.com/davebirch/evejs-contrib/issues/7)) ([2711686](https://github.com/davebirch/evejs-contrib/commit/2711686c719d60dcecda259a448836d5ff5ab6ae))
+
+
+### Bug Fixes
+
+* Discord post checks from review (UTF-8 and size, stale post, fences, markers) ([#10](https://github.com/davebirch/evejs-contrib/issues/10)) ([95ad4bc](https://github.com/davebirch/evejs-contrib/commit/95ad4bc083ecce52b623ce386029028bcc79d127))
+
 ## [0.2.0](https://github.com/davebirch/evejs-contrib/compare/v0.1.0...v0.2.0) (2026-11-19)
 
 
