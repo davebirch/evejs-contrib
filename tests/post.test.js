@@ -5,7 +5,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
-const { checkPost, POST_LIMIT } = require('../skills/upstream-report/scripts/bundle.js');
+const { checkPost, POST_LIMIT, placeAll } = require('../skills/upstream-report/scripts/bundle.js');
 
 const CLI = path.join(__dirname, '..', 'skills', 'upstream-report', 'scripts', 'bundle.js');
 const tmp = () => require('./fixtures/tmp.js').mk('post-test-');
@@ -200,4 +200,40 @@ test('--post is a usage error on commands other than zip and check', () => {
   assert.equal(run('manifest', d, '--post', p).status, 64);
   assert.equal(run('init', path.join(d, 'n'), '--area', 'a', '--version', 'v', '--post', p).status, 64);
   assert.ok(!fs.existsSync(path.join(d, 'n')));
+});
+
+test('a one-line ```code``` span is not a fence: a marker after it still splits the post', () => {
+  ok(`${HEAD}\n\n\`\`\`x = 1\`\`\`\n${TAIL}--- part 2/2 ---\n${sized(500)}`);
+  fails(`${HEAD}\n\n\`\`\`x = 1\`\`\`\n${TAIL}--- part 2/3 ---\n${sized(500)}`, /2 parts/);
+});
+
+test('a ``` line with a backtick later in it, that is not a one-line span, gets a clear message', () => {
+  const p = checkPost(`${HEAD}\n\n\`\`\`js \`a\`\nconst a = 1;\n\`\`\`\n${TAIL}`);
+  assert.ok(p.some((x) => /line 5: a ``` fence's opening line can't contain another backtick/.test(x)), JSON.stringify(p));
+  assert.ok(!p.some((x) => /table/.test(x)), JSON.stringify(p));
+});
+
+test('placeAll: all or nothing, and a failed move restores the files it replaced', () => {
+  const d = tmp();
+  const f = (n, t) => { fs.writeFileSync(path.join(d, n), t); return path.join(d, n); };
+  const zip = path.join(d, 'r.zip'), post = path.join(d, 'r.post.md');
+  f('r.zip', 'old zip'); f('r.post.md', 'old post');
+  f('r.zip.part', 'new zip'); f('r.post.md.part', 'new post');
+  const failing = (from, to) => { if (to === post) { const e = new Error('locked'); e.code = 'EPERM'; throw e; } fs.renameSync(from, to); };
+  assert.throws(() => placeAll([{ part: `${zip}.part`, dest: zip }, { part: `${post}.part`, dest: post }], { rename: failing }), /locked/);
+  assert.equal(fs.readFileSync(zip, 'utf8'), 'old zip');
+  assert.equal(fs.readFileSync(post, 'utf8'), 'old post');
+  assert.deepEqual(fs.readdirSync(d).sort(), ['r.post.md', 'r.zip']);
+  // with nothing there before, a failure leaves nothing
+  fs.rmSync(zip); fs.rmSync(post);
+  f('r.zip.part', 'new zip'); f('r.post.md.part', 'new post');
+  assert.throws(() => placeAll([{ part: `${zip}.part`, dest: zip }, { part: `${post}.part`, dest: post }], { rename: failing }));
+  assert.deepEqual(fs.readdirSync(d), []);
+  // and when it works, both are replaced and no backups are left
+  f('r.zip', 'old zip'); f('r.post.md', 'old post');
+  f('r.zip.part', 'new zip'); f('r.post.md.part', 'new post');
+  placeAll([{ part: `${zip}.part`, dest: zip }, { part: `${post}.part`, dest: post }]);
+  assert.equal(fs.readFileSync(zip, 'utf8'), 'new zip');
+  assert.equal(fs.readFileSync(post, 'utf8'), 'new post');
+  assert.deepEqual(fs.readdirSync(d).sort(), ['r.post.md', 'r.zip']);
 });

@@ -495,6 +495,10 @@ function checkPost(text, { name = 'post', terms = { terms: [], names: [], identi
       if (i !== firstText) parts.push([]);
       return;
     }
+    const ticks = /^ {0,3}(`{3,})/.exec(line);
+    if (ticks && !new RegExp(`${ticks[1]}\\s*$`).test(line.slice(ticks[0].length))) {
+      say(`line ${n}: a \`\`\` fence's opening line can't contain another backtick (no backticks in the language name; a one-line span ends with \`\`\`)`);
+    }
     if (/^\s*-{2,}\s*part\b/i.test(line)) say(`line ${n}: malformed part marker (write exactly "--- part n/m ---")`);
     parts[parts.length - 1].push(line);
   });
@@ -602,6 +606,30 @@ function runCheckPost({ pos, opt, flags }) {
   console.log('post check passed');
 }
 
+// Renames each part onto its dest as one step: existing dests are set aside first, and if any rename fails the
+// placed files are removed, the old ones put back and the parts deleted, then the error is thrown on.
+function placeAll(moves, { rename = fs.renameSync } = {}) {
+  for (const m of moves) {
+    if (exists(m.dest) && !fs.lstatSync(m.dest).isFile()) throw new Error(`not a regular file: ${path.basename(m.dest)}`);
+  }
+  const aside = [], placed = [];
+  try {
+    for (const m of moves) {
+      if (!exists(m.dest)) continue;
+      const old = `${m.dest}.${process.pid}.old`;
+      rename(m.dest, old);
+      aside.push({ old, dest: m.dest });
+    }
+    for (const m of moves) { rename(m.part, m.dest); placed.push(m.dest); }
+  } catch (e) {
+    for (const p of placed) fs.rmSync(p, { force: true });
+    for (const a of aside) { try { fs.renameSync(a.old, a.dest); } catch (e2) { /* the old file stays at <dest>.<pid>.old */ } }
+    for (const m of moves) fs.rmSync(m.part, { force: true });
+    throw e;
+  }
+  for (const a of aside) fs.rmSync(a.old, { force: true });
+}
+
 function zip({ pos, opt, flags }) {
   if (pos.length !== 2) usage(`usage: bundle.js zip <dir> <out.zip> [--post <post.md>] ${TERM_USAGE} [--allow-binary <name>]...`);
   const dir = path.resolve(pos[0]);
@@ -621,20 +649,15 @@ function zip({ pos, opt, flags }) {
   const { files } = listFiles(dir);
   const entries = files.map((f) => ({ name: `${top}/${f}`, data: fs.readFileSync(path.join(dir, ...f.split('/'))) }));
   fs.mkdirSync(path.dirname(out), { recursive: true });
-  // all or nothing: both .part files first, then both renames; if the post can't be put in place, the new
-  // zip goes too
-  let zipPlaced = false;
+  // all or nothing: both .part files first, then placeAll; a failure leaves the folder as it was
+  const moves = [{ part: `${out}.part`, dest: out }, ...(post ? [{ part: `${postOut}.part`, dest: postOut }] : [])];
   try {
     writeZip(entries, `${out}.part`);
     if (post) fs.writeFileSync(`${postOut}.part`, post.bytes);
-    fs.renameSync(`${out}.part`, out);
-    zipPlaced = true;
-    if (post) fs.renameSync(`${postOut}.part`, postOut);
+    placeAll(moves);
   } catch (e) {
-    fs.rmSync(`${out}.part`, { force: true });
-    if (post) fs.rmSync(`${postOut}.part`, { force: true });
-    if (zipPlaced) fs.rmSync(out, { force: true });
-    throw new Refused([`${e.code ? `${e.code}: ` : ''}could not write ${zipPlaced ? path.basename(postOut) : pos[1]}: nothing written`]);
+    for (const m of moves) fs.rmSync(m.part, { force: true });
+    throw new Refused([`${e.code ? `${e.code}: ` : ''}${e.message}: nothing written`]);
   }
   console.log(`wrote ${pos[1]} (${entries.length} files under ${top}/)`);
   if (post) console.log(`wrote ${path.basename(postOut)} beside it (the post)`);
@@ -664,6 +687,6 @@ function main(argv) {
   }
 }
 
-module.exports = { checkPost, POST_LIMIT };
+module.exports = { checkPost, POST_LIMIT, placeAll };
 
 if (require.main === module) main(process.argv.slice(2));
