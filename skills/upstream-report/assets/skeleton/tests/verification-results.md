@@ -6,4 +6,4 @@ TODO(bundle): summarise the [validation transcript](patch-validation.txt): the b
 
 ## Directed tests
 
-TODO(bundle): a table of scenario and result for each directed test run on the fix, or one line saying none were run.
+TODO(bundle): a table of scenario and result for each directed test run on the fix, or one line saying none were run. Describe system-level checks as bullets (setup, action, expected result); never attach harness or integration-test code. The functional tests ship in the patch, not here.

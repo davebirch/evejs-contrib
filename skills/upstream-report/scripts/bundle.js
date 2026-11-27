@@ -151,12 +151,64 @@ function init({ pos, opt }) {
 const sha256 = (file) => crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');
 const git = (cwd, args) => execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
 
+// A contributor's own "is the patch still needed" checks live in tests/patches/ and never ship.
+// Matches the folder segment only, on paths with either slash.
+// Case-insensitive, so Tests/Patches/ is refused too.
+const STILL_NEEDED = /(^|\/)tests\/patches\//;
+const isStillNeededTestPath = (p) => STILL_NEEDED.test(String(p).replace(/\\/g, '/').toLowerCase());
+const STILL_NEEDED_REFUSAL = 'tests/patches/ is for your own still-needed checks; keep it out of the submission: ';
+const TRADE_OFFS_HEADING = /^#{1,6}[ \t]+trade-offs and behaviour changes[ \t#]*$/im;
+
+// Paths named by a patch's file headers (diff --git, rename/copy from/to, ---/+++), without a/ b/ prefixes.
+// Hunk-aware: lines inside a hunk's counted body are content, never headers, so a body line that looks like
+// a header is ignored. Paths may be quoted and may hold spaces; a ---/+++ trailing tab part is dropped.
+function patchHeaderPaths(text) {
+  const out = [];
+  const unq = (v) => {
+    v = v.trim();
+    return v.length > 1 && v.startsWith('"') && v.endsWith('"') ? v.slice(1, -1).replace(/\\(["\\])/g, '$1') : v;
+  };
+  const strip = (v) => unq(v).replace(/^[ab]\//, '');
+  let oldLeft = 0, newLeft = 0;
+  for (const l of text.split(/\r?\n/)) {
+    if (oldLeft > 0 || newLeft > 0) {
+      if (l.startsWith('-')) oldLeft--;
+      else if (l.startsWith('+')) newLeft--;
+      else if (l.startsWith('\\')) { /* no-newline marker */ }
+      else { oldLeft--; newLeft--; }
+      continue;
+    }
+    let m;
+    if ((m = /^@@ -\d+(?:,(\d+))? \+\d+(?:,(\d+))? @@/.exec(l))) {
+      oldLeft = m[1] === undefined ? 1 : Number(m[1]);
+      newLeft = m[2] === undefined ? 1 : Number(m[2]);
+    } else if ((m = /^diff --git (.*)$/.exec(l))) {
+      const rest = m[1];
+      const q = /^("(?:[^"\\]|\\.)*")\s+("(?:[^"\\]|\\.)*")$/.exec(rest);
+      if (q) out.push(strip(q[1]), strip(q[2]));
+      else {
+        // unquoted with spaces: try every split at ' b/'
+        for (let i = rest.indexOf(' b/'); i !== -1; i = rest.indexOf(' b/', i + 1)) out.push(strip(rest.slice(0, i)), strip(rest.slice(i + 1)));
+      }
+    } else if ((m = /^(?:rename|copy) (?:from|to) (.*)$/.exec(l))) out.push(unq(m[1]));
+    else if ((m = /^(?:\+\+\+|---) (.*)$/.exec(l))) out.push(strip(m[1].split('\t')[0]));
+  }
+  return out;
+}
+
 function validate({ pos, opt }) {
   if (pos.length !== 1 || !opt.repo || !opt.base) usage('usage: bundle.js validate <dir> --repo <git checkout> --base <rev>');
   const dir = path.resolve(pos[0]);
   const patchDir = path.join(dir, 'patches');
   const patches = exists(patchDir) ? fs.readdirSync(patchDir).filter((f) => f.endsWith('.patch')).sort() : [];
   if (!patches.length) throw new Refused(['no patches/*.patch to validate']);
+  const touched = [];
+  for (const f of patches) {
+    for (const p of patchHeaderPaths(fs.readFileSync(path.join(patchDir, f), 'utf8'))) {
+      if (isStillNeededTestPath(p)) touched.push(`${STILL_NEEDED_REFUSAL}patches/${f}: ${p}`);
+    }
+  }
+  if (touched.length) throw new Refused([...new Set(touched)]);
   const repo = path.resolve(opt.repo);
   let head;
   try { head = git(repo, ['rev-parse', '--verify', `${opt.base}^{commit}`]).trim(); } catch (e) {
@@ -397,7 +449,9 @@ function check(dir, { terms, identity, names = [], hosts = [], allow = [], allow
     if (s === null) problems.push('DEVELOPER-HANDOFF.md has no "## Merge checklist" section');
     else if (!/^\s*\d+[.)]\s+\S/m.test(s)) problems.push('DEVELOPER-HANDOFF.md Merge checklist has no numbered item');
   }
+  for (const f of files) if (isStillNeededTestPath(f)) problems.push(`${STILL_NEEDED_REFUSAL}${f}`);
   if (exists(at('BUG-REPORT.md'))) {
+    if (!TRADE_OFFS_HEADING.test(text('BUG-REPORT.md'))) problems.push('BUG-REPORT.md has no "Trade-offs and behaviour changes" section');
     const n = text('BUG-REPORT.md').replace(/\n+$/, '').split('\n').length;
     if (n > 40) problems.push(`BUG-REPORT.md is ${n} lines (limit 40)`);
   }
@@ -708,6 +762,6 @@ function main(argv) {
   }
 }
 
-module.exports = { checkPost, POST_LIMIT, placeAll, refusalFor };
+module.exports = { isStillNeededTestPath, checkPost, POST_LIMIT, placeAll, refusalFor };
 
 if (require.main === module) main(process.argv.slice(2));

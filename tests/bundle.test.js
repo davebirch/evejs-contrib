@@ -34,7 +34,7 @@ function goodBundle({ health = README_HEALTH, report = true } = {}) {
   const b = path.join(d, 'bundle');
   assert.equal(run('init', b, '--area', 'fleet', '--version', 'EveJS 000000.1').status, 0);
   put(b, 'README.md', `# Fleet fix\n\nSee [bug](BUG-REPORT.md) and [handoff](DEVELOPER-HANDOFF.md).\n\n${health}`);
-  put(b, 'BUG-REPORT.md', '# Bug\n\nShort.\n');
+  put(b, 'BUG-REPORT.md', '# Bug\n\n## Trade-offs and behaviour changes\n\nNone.\n');
   put(b, 'DEVELOPER-HANDOFF.md', '# Handoff\n\n## Merge checklist\n\n1. Review the diff.\n');
   put(b, 'tests/verification-results.md', '# Results\n\nSee [transcript](patch-validation.txt).\n');
   fs.writeFileSync(path.join(b, 'patches', '01-fleet.patch'), execFileSync('git', ['-C', repo, 'diff', base, 'HEAD']));
@@ -283,9 +283,9 @@ test('check: evidence before/after links accepted', () => {
 test('check: refuses each problem separately', () => {
   const cases = {
     'no health section': (b) => put(b, 'README.md', '# Fleet\n\nNothing here.\n'),
-    'leftover TODO': (b) => put(b, 'BUG-REPORT.md', '# Bug\n\nTODO(bundle): fill me\n'),
+    'leftover TODO': (b) => put(b, 'BUG-REPORT.md', '# Bug\n\n## Trade-offs and behaviour changes\n\nTODO(bundle): fill me\n'),
     'broken link': (b) => put(b, 'README.md', `# R\n\n[x](missing.md)\n\n${README_HEALTH}`),
-    '41-line bug report': (b) => put(b, 'BUG-REPORT.md', Array.from({ length: 41 }, (_, i) => `line ${i}`).join('\n') + '\n'),
+    '41-line bug report': (b) => put(b, 'BUG-REPORT.md', ['## Trade-offs and behaviour changes', ...Array.from({ length: 40 }, (_, i) => `line ${i}`)].join('\n') + '\n'),
     'planted home path': (b) => put(b, 'files/note.txt', 'see /home/sam/x\n'),
     'no merge checklist item': (b) => put(b, 'DEVELOPER-HANDOFF.md', '# H\n\n## Merge checklist\n\nnothing\n'),
     'no patches': (b) => fs.rmSync(path.join(b, 'patches', '01-fleet.patch')),
@@ -312,7 +312,7 @@ test('check: refuses each problem separately', () => {
 
 test('check: exactly 40 lines passes; stale manifest refused; symlink refused', (t) => {
   const { b } = goodBundle();
-  put(b, 'BUG-REPORT.md', Array.from({ length: 40 }, (_, i) => `line ${i}`).join('\n') + '\n');
+  put(b, 'BUG-REPORT.md', ['## Trade-offs and behaviour changes', ...Array.from({ length: 39 }, (_, i) => `line ${i}`)].join('\n') + '\n');
   assert.equal(run('manifest', b).status, 0);
   assert.equal(check(b).status, 0);
   put(b, 'files/note.txt', 'changed\n');
@@ -381,7 +381,7 @@ test('zip: refuses when check fails; otherwise every entry starts <name>/', () =
   const bad = runNoId('zip', b, out);
   assert.equal(bad.status, 2);
   assert.ok(!fs.existsSync(out) && !fs.existsSync(out + '.part'));
-  put(b, 'BUG-REPORT.md', '# Bug\n\nShort.\n');
+  put(b, 'BUG-REPORT.md', '# Bug\n\n## Trade-offs and behaviour changes\n\nNone.\n');
   assert.equal(run('manifest', b).status, 0);
   const ok = runNoId('zip', b, out);
   assert.equal(ok.status, 0, ok.stdout + ok.stderr);
@@ -729,4 +729,146 @@ test('zip --post: a refusal from a failed move names any old file it could not p
   const e = Object.assign(new Error('locked'), { code: 'EPERM', leftover: ['/x/r.zip.7.old'] });
   assert.equal(refusalFor(e), 'EPERM: locked: the old r.zip is left at r.zip.7.old: rename it back');
   assert.equal(refusalFor(Object.assign(new Error('locked'), { code: 'EPERM' })), 'EPERM: locked: nothing written');
+});
+
+// ---- submissions carry functional tests only; own still-needed checks stay out; trade-offs section required
+
+const REFUSE_TESTS = /refusing: tests\/patches\/ is for your own still-needed checks; keep it out of the submission: /;
+
+test('check: refuses a tests/patches path in files/', () => {
+  const { b } = goodBundle();
+  const r = breakIt(b, (x) => put(x, 'files/server/tests/patches/still-needed.test.js', 'x\n'));
+  assert.equal(r.status, 2, r.stdout);
+  assert.match(r.stdout, REFUSE_TESTS);
+  assert.match(r.stdout, /files\/server\/tests\/patches\/still-needed\.test\.js/);
+});
+
+test('check: refuses a top-level tests/patches path in files/', () => {
+  const { b } = goodBundle();
+  const r = breakIt(b, (x) => put(x, 'files/tests/patches/a.js', 'x\n'));
+  assert.equal(r.status, 2, r.stdout);
+  assert.match(r.stdout, REFUSE_TESTS);
+});
+
+test('validate: refuses a patch touching server/tests/patches/', () => {
+  const { b, repo, base } = goodBundle();
+  put(b, 'patches/02-own.patch', [
+    'diff --git a/server/tests/patches/x.test.js b/server/tests/patches/x.test.js',
+    'new file mode 100644', '--- /dev/null', '+++ b/server/tests/patches/x.test.js', '@@ -0,0 +1 @@', '+x', ''].join('\n'));
+  const r = runNoId('validate', b, '--repo', repo, '--base', base);
+  assert.equal(r.status, 2, r.stdout + r.stderr);
+  assert.match(r.stdout, REFUSE_TESTS);
+  assert.match(r.stdout, /server\/tests\/patches\/x\.test\.js/);
+  // a deleted file shows on the '--- a/' side
+  put(b, 'patches/02-own.patch', '--- a/tests/patches/y.js\n+++ /dev/null\n@@ -1 +0,0 @@\n-x\n');
+  const d = runNoId('validate', b, '--repo', repo, '--base', base);
+  assert.equal(d.status, 2);
+  assert.match(d.stdout, REFUSE_TESTS);
+});
+
+test('check and validate: server/tests/<fix>/ functional tests are fine, even patches-cleanup', () => {
+  const { b, repo, base } = goodBundle();
+  for (const rel of ['files/server/tests/fleet-fix/a.test.js', 'files/server/tests/patches-cleanup/x.test.js', 'files/server/tests/my-patches/y.test.js', 'files/server/src/patches/z.js']) put(b, rel, 'ok\n');
+  const r = breakIt(b, () => {});
+  assert.equal(r.status, 0, r.stdout);
+  put(b, 'patches/02-ok.patch', [
+    'diff --git a/server/tests/patches-cleanup/x.test.js b/server/tests/patches-cleanup/x.test.js',
+    'new file mode 100644', '--- /dev/null', '+++ b/server/tests/patches-cleanup/x.test.js', '@@ -0,0 +1 @@', '+x', ''].join('\n'));
+  const v = runNoId('validate', b, '--repo', repo, '--base', base);
+  assert.doesNotMatch(v.stdout, /still-needed/);
+  assert.equal(v.status, 0, v.stdout + v.stderr);
+  assert.doesNotMatch(v.stdout + v.stderr, /refusing/);
+});
+
+test('validate: refuses rename, copy, diff --git, quoted, spaced and mixed-case still-needed paths', () => {
+  const { b, repo, base } = goodBundle();
+  const cases = {
+    'diff --git a/ok.js b/tests/patches/x.js\nnew file mode 100644\n': 'tests/patches/x.js',
+    'diff --git a/tests/patches/x.js b/ok.js\ndeleted file mode 100644\n': 'tests/patches/x.js',
+    'similarity index 90%\nrename from tests/patches/x.js\nrename to server/ok.js\n': 'tests/patches/x.js',
+    'similarity index 90%\nrename from server/ok.js\nrename to tests/patches/x.js\n': 'tests/patches/x.js',
+    'copy from server/ok.js\ncopy to "tests/patches/x.js"\n': 'tests/patches/x.js',
+    '--- "a/tests/patches/x.js"\n+++ "b/server/ok.js"\n': 'tests/patches/x.js',
+    '--- a/server/ok.js\n+++ b/tests/patches/my file.js\t2026-01-01 00:00:00\n': 'tests/patches/my file.js',
+    'diff --git "a/ok.js" "b/tests/patches/q x.js"\n': 'tests/patches/q x.js',
+    'diff --git a/my dir/ok.js b/tests/patches/x y.js\n': 'tests/patches/x y.js',
+    '--- a/Tests/Patches/x.js\n+++ b/Tests/Patches/x.js\n': 'Tests/Patches/x.js',
+  };
+  for (const [text, shown] of Object.entries(cases)) {
+    put(b, 'patches/02-own.patch', text);
+    const r = runNoId('validate', b, '--repo', repo, '--base', base);
+    assert.equal(r.status, 2, text + r.stdout);
+    assert.match(r.stdout, REFUSE_TESTS, text);
+    assert.ok(r.stdout.split('\n').some((x) => x.endsWith(`: ${shown}`)), text + r.stdout);
+  }
+});
+
+test('validate: a hunk body line that looks like a header does not trigger the refusal', () => {
+  const { b, repo, base } = goodBundle();
+  put(b, 'patches/02-ok.patch', [
+    'diff --git a/server/notes.txt b/server/notes.txt', '--- a/server/notes.txt', '+++ b/server/notes.txt',
+    '@@ -1,2 +1,2 @@', '--- a/tests/patches/x', '+++ b/tests/patches/x', ' ctx', ''].join('\n'));
+  const v = runNoId('validate', b, '--repo', repo, '--base', base);
+  assert.doesNotMatch(v.stdout, /still-needed/);
+  // after the hunk ends, a real header is seen again
+  put(b, 'patches/02-ok.patch', [
+    '--- a/server/notes.txt', '+++ b/server/notes.txt', '@@ -1 +1 @@', '-a', '+b',
+    '--- a/tests/patches/x', '+++ b/tests/patches/x', ''].join('\n'));
+  const w = runNoId('validate', b, '--repo', repo, '--base', base);
+  assert.equal(w.status, 2);
+  assert.match(w.stdout, REFUSE_TESTS);
+});
+
+test('validate: still-needed header edge cases (CRLF, no-newline marker, two hunks) are refused', () => {
+  const { b, repo, base } = goodBundle();
+  const cases = {
+    crlf: ['--- a/server/ok.js', '+++ b/tests/patches/x.js', '@@ -0,0 +1 @@', '+x', ''].join('\r\n'),
+    noNewlineMarker: [
+      'diff --git a/server/a.txt b/server/a.txt', '--- a/server/a.txt', '+++ b/server/a.txt', '@@ -1 +1 @@',
+      '-a', '\\ No newline at end of file', '+b', '\\ No newline at end of file',
+      'diff --git a/tests/patches/x.js b/tests/patches/x.js', '--- a/tests/patches/x.js', '+++ b/tests/patches/x.js',
+      '@@ -1 +1 @@', '-x', '+y', ''].join('\n'),
+    twoHunks: [
+      '--- a/server/a.txt', '+++ b/server/a.txt', '@@ -1 +1 @@', '-a', '+b', '@@ -5 +5 @@', '-c', '+d',
+      '--- a/tests/patches/x.js', '+++ b/tests/patches/x.js', '@@ -1 +1 @@', '-x', '+y', ''].join('\n'),
+  };
+  for (const [name, text] of Object.entries(cases)) {
+    put(b, 'patches/02-own.patch', text);
+    const r = runNoId('validate', b, '--repo', repo, '--base', base);
+    assert.equal(r.status, 2, name + r.stdout + r.stderr);
+    assert.match(r.stdout, REFUSE_TESTS, name);
+    assert.match(r.stdout, /tests\/patches\/x\.js/, name);
+  }
+});
+
+test('check: a bundle with no tests at all is fine', () => {
+  const { b } = goodBundle();
+  assert.ok(!fs.existsSync(path.join(b, 'files', 'server', 'tests')));
+  const r = check(b);
+  assert.equal(r.status, 0, r.stdout);
+});
+
+test('check: refuses a BUG-REPORT.md without a Trade-offs and behaviour changes heading', () => {
+  const { b } = goodBundle();
+  const r = breakIt(b, (x) => put(x, 'BUG-REPORT.md', '# Bug\n\nShort.\n'));
+  assert.equal(r.status, 2, r.stdout);
+  assert.deepEqual(refusals(r), ['refusing: BUG-REPORT.md has no "Trade-offs and behaviour changes" section']);
+});
+
+test('check: accepts the section holding just None., any heading level and case', () => {
+  for (const h of ['## Trade-offs and behaviour changes', '### TRADE-OFFS AND BEHAVIOUR CHANGES', '# trade-offs and behaviour changes']) {
+    const { b } = goodBundle();
+    const r = breakIt(b, (x) => put(x, 'BUG-REPORT.md', `# Bug\n\n${h}\n\nNone.\n`));
+    assert.equal(r.status, 0, `${h}: ${r.stdout}`);
+  }
+  const { b } = goodBundle();
+  const r = breakIt(b, (x) => put(x, 'BUG-REPORT.md', '# Bug\n\nSee trade-offs and behaviour changes below.\n'));
+  assert.equal(r.status, 2, 'prose mention is not a heading');
+});
+
+test('the still-needed matcher: folder segment only, backslashes normalised', () => {
+  const { isStillNeededTestPath: m } = require('../skills/upstream-report/scripts/bundle.js');
+  for (const p of ['tests/patches/a.js', 'files/server/tests/patches/a.js', 'files\\server\\tests\\patches\\a.js', 'b/server/tests/patches/a.js']) assert.ok(m(p), p);
+  for (const p of ['server/tests/patches-cleanup/a.js', 'server/tests/x/patches/a.js', 'server/src/tests-patches/a.js', 'server/mytests/patches/a.js', 'server/tests/mypatches/a.js', 'server/tests/patches.js', 'tests/patchesx/a.js']) assert.ok(!m(p), p);
+  assert.ok(m('server/Tests/Patches/a.js'));
 });
