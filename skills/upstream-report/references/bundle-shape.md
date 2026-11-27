@@ -58,4 +58,4 @@ wording plain and specific; numbers and log lines beat adjectives.
 - **Directed tests**: a table of scenario and result for each test run on the fix, or one line saying none
   were run. Describe system-level checks as bullets (setup, action, expected result): the functional tests
   ship in the patch, and harness, bots or integration-test code is never attached. Your own "still needed"
-  checks live outside the submission (`bundle.js` refuses a `tests/patches/` folder) and are not part of it.
+  checks live outside the submission (`bundle.js` refuses a `tests/patches/` folder, so a fix must not be named `patches` either: rename its test folder) and are not part of it.

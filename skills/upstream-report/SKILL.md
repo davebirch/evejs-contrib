@@ -39,7 +39,9 @@ Beside the zip, never inside it: `<zip name minus .zip>.post.md`, the condensed 
 - **Your own "is this patch still needed" checks are never submitted.** A check that the unpatched tree
   still shows the bug only serves you when you move to a new release. Keep it in a folder outside the
   submission (a `tests/patches/` folder is refused) and out of the patch and `files/`: `bundle.js check`
-  refuses that folder in `files/`, and `validate` refuses it in a patch's file headers.
+  refuses that folder in `files/`, and `validate` refuses it in a patch's file headers (renames, copies
+  and quoted or spaced paths included, any letter case). Don't name your fix `patches` either: a
+  `server/tests/patches/` folder is refused, so rename the fix folder.
 - **System-level checks are described, not shipped.** Integration or system-level repro goes in
   `BUG-REPORT.md`'s reproduction and in the directed-tests table of `tests/verification-results.md` as
   bullets: setup, then action, then expected result. Never attach your harness, bots or integration-test

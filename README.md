@@ -43,7 +43,7 @@ Two files, side by side:
   files, a developer handoff and upstream's own error report (redacted), with checksums.
   Functional tests ship inside the patch (`server/tests/<patch-name>/`). Your own "is this patch still
   needed" checks stay in your tree and are never submitted (`bundle.js` refuses a `tests/patches/`
-  folder). System-level checks are described as bullets (setup, action, expected result), never shipped as
+  folder, so name a fix anything but `patches`). System-level checks are described as bullets (setup, action, expected result), never shipped as
   harness code. `BUG-REPORT.md` must have a "Trade-offs and behaviour changes" section (`None.` when
   nothing); `bundle.js check` refuses a bundle without it.
 - `<name>.post.md`: a condensed post to paste into the EveJS Discord with the zip attached: one message of
