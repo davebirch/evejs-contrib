@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.0](https://github.com/davebirch/evejs-contrib/compare/v0.3.0...v0.4.0) (2026-11-27)
+
+
+### Features
+
+* submission tests and repro rules ([#11](https://github.com/davebirch/evejs-contrib/issues/11)) ([cb92856](https://github.com/davebirch/evejs-contrib/commit/cb928560067d5479becb1deb473453bb10cbe5a5))
+
 ## [0.3.0](https://github.com/davebirch/evejs-contrib/compare/v0.2.0...v0.3.0) (2026-11-19)
 
 
