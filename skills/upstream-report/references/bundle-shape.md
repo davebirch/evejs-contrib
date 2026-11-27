@@ -8,8 +8,8 @@ wording plain and specific; numbers and log lines beat adjectives.
 - **Title** (one line): symptom and trigger. Example: `# Fleet size is off by one when a fleet is formed`
 - **Environment and reproduction** (3-8 lines): version, platform, Node.js version, steps.
   Example: `EveJS 000000.1, Windows 11, Node v24.0.0. 1. Form a fleet of two pilots. 2. Open the fleet window.`
-  A system-level check is described here as bullets (setup, action, expected result); never attach harness,
-  bots or integration-test code.
+  A system-level check is described here as bullets (setup, action, expected result); never attach harness
+  or integration-test code.
 - **Observed behaviour** (2-6 lines): what happens, with the key numbers or log lines.
   Example: `The window shows 3 members; the server logs "fleetSize=3".`
 - **Expected behaviour and the fix** (2-6 lines): what should happen, the fix in a few sentences, and
@@ -57,5 +57,6 @@ wording plain and specific; numbers and log lines beat adjectives.
   JavaScript file passed `node --check` (summarise `patch-validation.txt`).
 - **Directed tests**: a table of scenario and result for each test run on the fix, or one line saying none
   were run. Describe system-level checks as bullets (setup, action, expected result): the functional tests
-  ship in the patch, and harness, bots or integration-test code is never attached. Your own "still needed"
-  checks live outside the submission (`bundle.js` refuses a `tests/patches/` folder, so a fix must not be named `patches` either: rename its test folder) and are not part of it.
+  ship in the patch, and harness or integration-test code is never attached. Your own "still needed"
+  checks live outside the submission (`bundle.js` refuses a `tests/patches/` folder, so a fix must not be
+  named `patches` either: rename its test folder) and are not part of it.

@@ -117,11 +117,11 @@ Pass means every item holds. `<out>` is the bundle folder the agent built, `<zip
     ends by pointing at the attached zip, and it has no table outside a code block, no link into the zip
     and no image. The final message names it as the text to post.
 18. BUG-REPORT.md has a `Trade-offs and behaviour changes` heading exactly once (the skeleton's section,
-    before "Testing methodology", not a second copy) with a few bullets or the single line `None.`, and DEVELOPER-HANDOFF.md has the same section with the reasoning;
-    an invented trade-off fails.
+    before "Testing methodology", not a second copy) with a few bullets or the single line `None.`, and
+    DEVELOPER-HANDOFF.md has the same section with the reasoning; an invented trade-off fails.
 19. Tests follow the submission rules: any functional test sits in the patch under
     `server/tests/<patch-name>/` and is listed in the handoff's Changes table; no `tests/patches/` path
-    anywhere in `<out>`; no load-test, harness or bots code attached (the evidence is the recomputable
+    anywhere in `<out>`; no load-test or harness code attached (the evidence is the recomputable
     health data); any system-level check is described as bullets (setup, action, expected result).
 
 ## Scoring commands

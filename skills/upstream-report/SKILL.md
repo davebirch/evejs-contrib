@@ -44,7 +44,7 @@ Beside the zip, never inside it: `<zip name minus .zip>.post.md`, the condensed 
   `server/tests/patches/` folder is refused, so rename the fix folder.
 - **System-level checks are described, not shipped.** Integration or system-level repro goes in
   `BUG-REPORT.md`'s reproduction and in the directed-tests table of `tests/verification-results.md` as
-  bullets: setup, then action, then expected result. Never attach your harness, bots or integration-test
+  bullets: setup, then action, then expected result. Never attach your harness or integration-test
   code: upstream keep their own repro scenarios.
 - **Trade-offs and behaviour changes.** `BUG-REPORT.md` has a mandatory "Trade-offs and behaviour changes"
   section (a few bullets): whatever the patch deliberately changes or gives up beyond fixing the bug, that
@@ -82,8 +82,9 @@ Beside the zip, never inside it: `<zip name minus .zip>.post.md`, the condensed 
    (a relative `--output` lands inside the checkout, so always pass an absolute path; not `format-patch`:
    it embeds the author's email, which the scan refuses; `--output` lets git write
    the file itself, so no shell redirection re-encodes it or changes line endings). Write any other
-   artefact the same way, never with `>`. Copy each changed file to `<bundle>/files/<path in the repo>`. Functional tests for the fix belong in the
-   patch under `server/tests/<patch-name>/`; leave your own "still needed" checks out of it.
+   artefact the same way, never with `>`. Copy each changed file to `<bundle>/files/<path in the repo>`.
+   Functional tests for the fix belong in the patch under `server/tests/<patch-name>/`; leave your own
+   "still needed" checks out of it.
 4. **Validate.** `node <skill>/scripts/bundle.js validate <bundle> --repo <checkout> --base <base tag or commit>`
    applies the patches to a clean copy of the base and syntax-checks the changed JavaScript. It writes
    `tests/patch-validation.txt`; it must say `Result: PASS`.

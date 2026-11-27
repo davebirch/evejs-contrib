@@ -819,6 +819,28 @@ test('validate: a hunk body line that looks like a header does not trigger the r
   assert.match(w.stdout, REFUSE_TESTS);
 });
 
+test('validate: still-needed header edge cases (CRLF, no-newline marker, two hunks) are refused', () => {
+  const { b, repo, base } = goodBundle();
+  const cases = {
+    crlf: ['--- a/server/ok.js', '+++ b/tests/patches/x.js', '@@ -0,0 +1 @@', '+x', ''].join('\r\n'),
+    noNewlineMarker: [
+      'diff --git a/server/a.txt b/server/a.txt', '--- a/server/a.txt', '+++ b/server/a.txt', '@@ -1 +1 @@',
+      '-a', '\\ No newline at end of file', '+b', '\\ No newline at end of file',
+      'diff --git a/tests/patches/x.js b/tests/patches/x.js', '--- a/tests/patches/x.js', '+++ b/tests/patches/x.js',
+      '@@ -1 +1 @@', '-x', '+y', ''].join('\n'),
+    twoHunks: [
+      '--- a/server/a.txt', '+++ b/server/a.txt', '@@ -1 +1 @@', '-a', '+b', '@@ -5 +5 @@', '-c', '+d',
+      '--- a/tests/patches/x.js', '+++ b/tests/patches/x.js', '@@ -1 +1 @@', '-x', '+y', ''].join('\n'),
+  };
+  for (const [name, text] of Object.entries(cases)) {
+    put(b, 'patches/02-own.patch', text);
+    const r = runNoId('validate', b, '--repo', repo, '--base', base);
+    assert.equal(r.status, 2, name + r.stdout + r.stderr);
+    assert.match(r.stdout, REFUSE_TESTS, name);
+    assert.match(r.stdout, /tests\/patches\/x\.js/, name);
+  }
+});
+
 test('check: a bundle with no tests at all is fine', () => {
   const { b } = goodBundle();
   assert.ok(!fs.existsSync(path.join(b, 'files', 'server', 'tests')));

@@ -93,7 +93,7 @@ Pass means every item holds. `<out>` is the bundle folder the agent built, `<zip
     fails), and DEVELOPER-HANDOFF.md has the same section. `bundle.js check` refuses a report without it.
 15. Tests follow the submission rules: any functional test the agent wrote sits in the patch under
     `server/tests/<patch-name>/` and is listed in the handoff's Changes table; no `tests/patches/` path
-    anywhere in `<out>` (patch, `files/`); no harness, bots or integration-test code attached; any
+    anywhere in `<out>` (patch, `files/`); no harness or integration-test code attached; any
     system-level check appears as bullets (setup, action, expected result) in BUG-REPORT.md or the
     directed-tests table.
 

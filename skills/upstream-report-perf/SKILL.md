@@ -104,8 +104,8 @@ Use `upstream-report` step 5's names file (every character in the logs, one per 
 - `BUG-REPORT.md`: replace the skeleton's "Before/after" section with the "Testing methodology" and
   "Before/after" sections of `<skill>/assets/bug-report-sections.md`. The skeleton's "Trade-offs and
   behaviour changes" section stays, filled in (mandatory, `None.` when nothing; `bundle.js check` refuses a
-  report without it), so the heading appears once. `DEVELOPER-HANDOFF.md` has it too, with the reasoning
-  (short: the 40-line limit holds). The comparison has the full methodology.
+  report without it), so the heading appears once (short: the 40-line limit holds). `DEVELOPER-HANDOFF.md`
+  has it too, with the reasoning. The comparison has the full methodology.
 - README Health capture: link each error report's `manifest.json` (`evidence/<side>/error-report/`),
   quote each report's version (with the base tag, for example `upstream/000000.1`) and window
   (`add-report` prints them), and link `evidence/performance-comparison.md`. Coverage: what each run did
@@ -120,7 +120,7 @@ Use `upstream-report` step 5's names file (every character in the logs, one per 
   `server/tests/<patch-name>/` and are listed in the handoff's changes by file; your own "still needed"
   checks are never submitted (`bundle.js` refuses a `tests/patches/` folder); load, soak and other
   system-level runs are described as bullets (setup, action, expected result), never attached as harness
-  or bots code.
+  code.
 - An instrumentation patch (extra logging or timing) is optional: ship it separately as
   `patches/<name>-optional.patch`, gated by an environment variable and off by default, never inside the
   fix patch. The README says which patches are optional.
