@@ -42,10 +42,10 @@ Two files, side by side:
 - `<name>.zip`: the bundle, one top folder holding the report (`BUG-REPORT.md`), the patch, the changed
   files, a developer handoff and upstream's own error report (redacted), with checksums.
   Functional tests ship inside the patch (`server/tests/<patch-name>/`). Your own "is this patch still
-  needed" checks stay in your tree and are never submitted (the bundle check refuses a `tests/patches/`
+  needed" checks stay in your tree and are never submitted (`bundle.js` refuses a `tests/patches/`
   folder). System-level checks are described as bullets (setup, action, expected result), never shipped as
   harness code. `BUG-REPORT.md` must have a "Trade-offs and behaviour changes" section (`None.` when
-  nothing); the bundle check refuses a bundle without it.
+  nothing); `bundle.js check` refuses a bundle without it.
 - `<name>.post.md`: a condensed post to paste into the EveJS Discord with the zip attached: one message of
   at most 1,900 characters (Discord's limit is 2,000), with no links into the zip, no images and no tables
   (except a small one in a code block), saved as UTF-8 and at most 64 KiB.

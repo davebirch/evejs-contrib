@@ -18,8 +18,8 @@ keeps its transcript), 64 usage; `leak-scan.js` exits 2 when it finds a hit.
 1. `README.md`: what it is, the base version, how to apply the patch, health capture, coverage, questions.
 2. `BUG-REPORT.md`: at most 40 lines; the full report. Environment and reproduction, observed, expected,
    and a mandatory "Trade-offs and behaviour changes" section (`None.` when there is nothing).
-3. `DEVELOPER-HANDOFF.md`: cause, changes by file (functional tests included), trade-offs and behaviour
-   changes with the reasoning, open questions, ends with a numbered merge checklist.
+3. `DEVELOPER-HANDOFF.md`: cause, changes by file (functional tests included), trade-offs and
+   behaviour changes with the reasoning, open questions, ends with a numbered merge checklist.
 4. `patches/`: the fix as `.patch` file(s) against the base release, including its functional tests.
 5. `files/<repo path>`: each changed file in full, as it is after the fix.
 6. `tests/`: `patch-validation.txt` (written by `validate`) and `verification-results.md`. This folder
@@ -37,9 +37,9 @@ Beside the zip, never inside it: `<zip name minus .zip>.post.md`, the condensed 
   and are copied to `files/` like any changed file. They prove the change is correct and let upstream run
   them against its own port of it. List them in `DEVELOPER-HANDOFF.md`'s changes by file.
 - **Your own "is this patch still needed" checks are never submitted.** A check that the unpatched tree
-  still shows the bug only serves you when you move to a new release. Keep it in your own tree (for
-  example under a `tests/patches/` folder) and out of the patch and `files/`; the bundle check refuses a
-  `tests/patches/` folder.
+  still shows the bug only serves you when you move to a new release. Keep it in a folder outside the
+  submission (a `tests/patches/` folder is refused) and out of the patch and `files/`: `bundle.js check`
+  refuses that folder in `files/`, and `validate` refuses it in a patch's file headers.
 - **System-level checks are described, not shipped.** Integration or system-level repro goes in
   `BUG-REPORT.md`'s reproduction and in the directed-tests table of `tests/verification-results.md` as
   bullets: setup, then action, then expected result. Never attach your harness, bots or integration-test
@@ -104,7 +104,7 @@ Beside the zip, never inside it: `<zip name minus .zip>.post.md`, the condensed 
    - `BUG-REPORT.md` always has its "Environment and reproduction" section. If the exact trigger isn't established, give the
      closest reproduction known (what was running, the command or feature exercised, the log lines) and
      mark it "trigger not confirmed"; never leave it out or invent steps.
-   - Fill the "Trade-offs and behaviour changes" sections in both documents; `None.` is a valid answer.
+   - Fill the "Trade-offs and behaviour changes" sections in both documents (see "What tests to ship").
    - Describe system-level checks as bullets (setup, action, expected result), never as attached code.
    - If the evidence doesn't link the logged error to the fix, say so in `BUG-REPORT.md` and list it under
      the handoff's open questions; don't claim a cause the evidence doesn't show.

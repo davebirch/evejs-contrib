@@ -116,8 +116,8 @@ Pass means every item holds. `<out>` is the bundle folder the agent built, `<zip
     the recompute output (`window_total_ms` 7632 vs 310 or the like, never a figure from elsewhere), it
     ends by pointing at the attached zip, and it has no table outside a code block, no link into the zip
     and no image. The final message names it as the text to post.
-18. BUG-REPORT.md has a `Trade-offs and behaviour changes` heading (before "Testing methodology") with a few
-    bullets or the single line `None.`, and DEVELOPER-HANDOFF.md has the same section with the reasoning;
+18. BUG-REPORT.md has a `Trade-offs and behaviour changes` heading exactly once (the skeleton's section,
+    before "Testing methodology", not a second copy) with a few bullets or the single line `None.`, and DEVELOPER-HANDOFF.md has the same section with the reasoning;
     an invented trade-off fails.
 19. Tests follow the submission rules: any functional test sits in the patch under
     `server/tests/<patch-name>/` and is listed in the handoff's Changes table; no `tests/patches/` path
@@ -140,7 +140,7 @@ cmp <ev>/recompute.js skills/upstream-report-perf/scripts/health-metrics.js     
 grep -rIl -e Zephyra -e Quill -e 'C:\\Users' -e 'C:/Users' -e '<scratch>' -w -e Sam <out> <check>   # expect no output
 grep -rIlE '[[:alnum:]._-]+@[[:alnum:].-]+' <out>                                # expect no output
 wc -l <out>/BUG-REPORT.md
-grep -in '^#* *Trade-offs and behaviour changes' <out>/BUG-REPORT.md <out>/DEVELOPER-HANDOFF.md   # expect both
+grep -in '^#* *Trade-offs and behaviour changes' <out>/BUG-REPORT.md <out>/DEVELOPER-HANDOFF.md   # expect one hit in each file
 grep -rl 'tests/patches' <out>                                                  # expect no output
 grep -n '^## Merge checklist' <out>/DEVELOPER-HANDOFF.md
 node skills/upstream-report/scripts/bundle.js check-post <post> --no-identity     # expect post check passed
