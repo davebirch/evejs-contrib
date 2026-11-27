@@ -101,8 +101,10 @@ Use `upstream-report` step 5's names file (every character in the logs, one per 
   the data, or list them as open questions in the comparison and the handoff.
 - **Only these runs' numbers.** Never quote a figure from an earlier or superseded measurement, a commit
   message or a draft.
-- `BUG-REPORT.md`: replace its "Before/after" section with the "Testing methodology" and "Before/after"
-  sections of `<skill>/assets/bug-report-sections.md` (short: the 40-line limit holds). The comparison
+- `BUG-REPORT.md`: replace its "Before/after" section with the "Trade-offs and behaviour changes",
+  "Testing methodology" and "Before/after" sections of `<skill>/assets/bug-report-sections.md`; the
+  "Trade-offs and behaviour changes" heading is mandatory (`None.` when nothing), and `DEVELOPER-HANDOFF.md`
+  has it too, with the reasoning (short: the 40-line limit holds). The comparison
   has the full methodology.
 - README Health capture: link each error report's `manifest.json` (`evidence/<side>/error-report/`),
   quote each report's version (with the base tag, for example `upstream/000000.1`) and window
@@ -114,6 +116,11 @@ Use `upstream-report` step 5's names file (every character in the logs, one per 
 - Don't claim more than the runs show. If the runs differ in anything besides the fix, or the patch does
   not plainly touch what the metrics measure, say that in the comparison and the handoff's open
   questions instead of calling the change a speed-up.
+- Tests follow `upstream-report`'s "What tests to ship": functional tests ship in the patch at
+  `server/tests/<patch-name>/` and are listed in the handoff's changes by file; your own "still needed"
+  checks are never submitted (the bundle check refuses a `tests/patches/` folder); load, soak and other
+  system-level runs are described as bullets (setup, action, expected result), never attached as harness
+  or bots code.
 - An instrumentation patch (extra logging or timing) is optional: ship it separately as
   `patches/<name>-optional.patch`, gated by an environment variable and off by default, never inside the
   fix patch. The README says which patches are optional.

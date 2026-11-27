@@ -15,6 +15,11 @@ TODO(bundle): why the bug happens, in terms of functions and data flow.
 | Source path | Relevant functions and changes |
 |-------------|--------------------------------|
 | TODO(bundle): path | TODO(bundle): functions and what changed |
+| TODO(bundle): `server/tests/<patch-name>/...` | TODO(bundle): the functional tests shipped in the patch |
+
+## Trade-offs and behaviour changes
+
+TODO(bundle): each thing the patch deliberately changes or gives up beyond the fix (a durability window, a timing change, anything a user, server operator or other code could notice), the reasoning, and why it is acceptable. Write `None.` if there is nothing.
 
 ## Correctness and recovery
 

@@ -16,17 +16,40 @@ keeps its transcript), 64 usage; `leak-scan.js` exits 2 when it finds a hit.
 ## The bundle, in order
 
 1. `README.md`: what it is, the base version, how to apply the patch, health capture, coverage, questions.
-2. `BUG-REPORT.md`: at most 40 lines; the full report. Environment and reproduction, observed, expected.
-3. `DEVELOPER-HANDOFF.md`: cause, changes by file, open questions, ends with a numbered merge checklist.
-4. `patches/`: the fix as `.patch` file(s) against the base release.
+2. `BUG-REPORT.md`: at most 40 lines; the full report. Environment and reproduction, observed, expected,
+   and a mandatory "Trade-offs and behaviour changes" section (`None.` when there is nothing).
+3. `DEVELOPER-HANDOFF.md`: cause, changes by file (functional tests included), trade-offs and behaviour
+   changes with the reasoning, open questions, ends with a numbered merge checklist.
+4. `patches/`: the fix as `.patch` file(s) against the base release, including its functional tests.
 5. `files/<repo path>`: each changed file in full, as it is after the fix.
-6. `tests/`: `patch-validation.txt` (written by `validate`) and `verification-results.md`.
+6. `tests/`: `patch-validation.txt` (written by `validate`) and `verification-results.md`. This folder
+   holds records only; the tests themselves travel inside the patch (see "What tests to ship").
 7. `error-report/`: upstream's report, ingested and redacted (details: `references/error-report.md`).
    A content or data bug has none: the README says `Health capture: not applicable: <reason>`.
 8. `manifest-sha256.txt`: checksums, written last.
 
 Each document's sections, lengths and an example per section: `references/bundle-shape.md`.
 Beside the zip, never inside it: `<zip name minus .zip>.post.md`, the condensed post (step 7).
+
+## What tests to ship
+
+- **Functional tests go in the patch,** in the project's own test layout at `server/tests/<patch-name>/`,
+  and are copied to `files/` like any changed file. They prove the change is correct and let upstream run
+  them against its own port of it. List them in `DEVELOPER-HANDOFF.md`'s changes by file.
+- **Your own "is this patch still needed" checks are never submitted.** A check that the unpatched tree
+  still shows the bug only serves you when you move to a new release. Keep it in your own tree (for
+  example under a `tests/patches/` folder) and out of the patch and `files/`; the bundle check refuses a
+  `tests/patches/` folder.
+- **System-level checks are described, not shipped.** Integration or system-level repro goes in
+  `BUG-REPORT.md`'s reproduction and in the directed-tests table of `tests/verification-results.md` as
+  bullets: setup, then action, then expected result. Never attach your harness, bots or integration-test
+  code: upstream keep their own repro scenarios.
+- **Trade-offs and behaviour changes.** `BUG-REPORT.md` has a mandatory "Trade-offs and behaviour changes"
+  section (a few bullets): whatever the patch deliberately changes or gives up beyond fixing the bug, that
+  a user, a server operator or other code could notice, and why that is acceptable. For example: "a crash can
+  lose up to ~1 s of progress; a clean shutdown loses nothing". With nothing to declare, write `None.`
+  `DEVELOPER-HANDOFF.md` has the same section with the reasoning. `bundle.js check` refuses a bundle
+  whose `BUG-REPORT.md` lacks that heading.
 
 ## Steps
 
@@ -57,7 +80,8 @@ Beside the zip, never inside it: `<zip name minus .zip>.post.md`, the condensed 
    (a relative `--output` lands inside the checkout, so always pass an absolute path; not `format-patch`:
    it embeds the author's email, which the scan refuses; `--output` lets git write
    the file itself, so no shell redirection re-encodes it or changes line endings). Write any other
-   artefact the same way, never with `>`. Copy each changed file to `<bundle>/files/<path in the repo>`.
+   artefact the same way, never with `>`. Copy each changed file to `<bundle>/files/<path in the repo>`. Functional tests for the fix belong in the
+   patch under `server/tests/<patch-name>/`; leave your own "still needed" checks out of it.
 4. **Validate.** `node <skill>/scripts/bundle.js validate <bundle> --repo <checkout> --base <base tag or commit>`
    applies the patches to a clean copy of the base and syntax-checks the changed JavaScript. It writes
    `tests/patch-validation.txt`; it must say `Result: PASS`.
@@ -80,6 +104,8 @@ Beside the zip, never inside it: `<zip name minus .zip>.post.md`, the condensed 
    - `BUG-REPORT.md` always has its "Environment and reproduction" section. If the exact trigger isn't established, give the
      closest reproduction known (what was running, the command or feature exercised, the log lines) and
      mark it "trigger not confirmed"; never leave it out or invent steps.
+   - Fill the "Trade-offs and behaviour changes" sections in both documents; `None.` is a valid answer.
+   - Describe system-level checks as bullets (setup, action, expected result), never as attached code.
    - If the evidence doesn't link the logged error to the fix, say so in `BUG-REPORT.md` and list it under
      the handoff's open questions; don't claim a cause the evidence doesn't show.
 7. **Write the Discord post** in a file outside the bundle folder (for example `<bundle>-post.md`),

@@ -1,3 +1,9 @@
+## Trade-offs and behaviour changes
+
+TODO(bundle): a few bullets: what the patch deliberately changes or gives up beyond the fix (for example
+"a crash can lose up to ~1 s of progress; a clean shutdown loses nothing") and why that is acceptable.
+Write `None.` if there is nothing. `bundle.js check` refuses a report without this heading.
+
 ## Testing methodology
 
 TODO(bundle): two to four lines: pristine release vs release + this fix only, machine and CPU pinning,

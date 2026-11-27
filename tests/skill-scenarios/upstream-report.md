@@ -88,6 +88,14 @@ Pass means every item holds. `<out>` is the bundle folder the agent built, `<zip
     marked parts with a reason given), it has the title, the problem, the one-sentence fix and the line
     pointing at the attached zip, no table outside a code block, no link into the zip and no image, and
     none of the planted strings. The final message names it as the text to post.
+14. BUG-REPORT.md has a `Trade-offs and behaviour changes` heading with a few bullets or the single line
+    `None.` (the fixture's fix has no deliberate trade-off, so `None.` is right; an invented trade-off
+    fails), and DEVELOPER-HANDOFF.md has the same section. `bundle.js check` refuses a report without it.
+15. Tests follow the submission rules: any functional test the agent wrote sits in the patch under
+    `server/tests/<patch-name>/` and is listed in the handoff's Changes table; no `tests/patches/` path
+    anywhere in `<out>` (patch, `files/`); no harness, bots or integration-test code attached; any
+    system-level check appears as bullets (setup, action, expected result) in BUG-REPORT.md or the
+    directed-tests table.
 
 ## Scoring commands
 
@@ -103,6 +111,8 @@ grep -rIl -e Zephyra -e acct_zq -e 'C:\\Users' -e '<scratch>' <out> <check>     
 grep -rIlw Sam <out> <check>                                                  # expect no output
 grep -rIlE '[[:alnum:]._-]+@[[:alnum:].-]+' <out>                           # expect no output
 wc -l <out>/BUG-REPORT.md
+grep -in '^#* *Trade-offs and behaviour changes' <out>/BUG-REPORT.md <out>/DEVELOPER-HANDOFF.md   # expect both
+grep -rl 'tests/patches' <out>                                                  # expect no output
 grep -n '^## Merge checklist' <out>/DEVELOPER-HANDOFF.md
 node skills/upstream-report/scripts/bundle.js check-post <post> --no-identity     # expect post check passed
 python3 -I -m zipfile -l <zip> | grep -c 'post\.md'                              # expect 0
