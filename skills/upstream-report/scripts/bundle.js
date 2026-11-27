@@ -151,12 +151,27 @@ function init({ pos, opt }) {
 const sha256 = (file) => crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');
 const git = (cwd, args) => execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
 
+// A contributor's own "is the patch still needed" checks live in tests/patches/ and never ship.
+// Matches the folder segment only, on paths with either slash.
+const STILL_NEEDED = /(^|\/)tests\/patches\//;
+const isStillNeededTestPath = (p) => STILL_NEEDED.test(String(p).replace(/\\/g, '/'));
+const STILL_NEEDED_REFUSAL = 'tests/patches/ is for your own still-needed checks; keep it out of the submission: ';
+const TRADE_OFFS_HEADING = /^#{1,6}[ \t]+trade-offs and behaviour changes[ \t#]*$/im;
+
 function validate({ pos, opt }) {
   if (pos.length !== 1 || !opt.repo || !opt.base) usage('usage: bundle.js validate <dir> --repo <git checkout> --base <rev>');
   const dir = path.resolve(pos[0]);
   const patchDir = path.join(dir, 'patches');
   const patches = exists(patchDir) ? fs.readdirSync(patchDir).filter((f) => f.endsWith('.patch')).sort() : [];
   if (!patches.length) throw new Refused(['no patches/*.patch to validate']);
+  const touched = [];
+  for (const f of patches) {
+    for (const l of fs.readFileSync(path.join(patchDir, f), 'utf8').split(/\r?\n/)) {
+      const m = /^(?:\+\+\+|---) (?:[ab]\/)?(\S+)/.exec(l);
+      if (m && isStillNeededTestPath(m[1])) touched.push(`${STILL_NEEDED_REFUSAL}patches/${f}: ${m[1]}`);
+    }
+  }
+  if (touched.length) throw new Refused([...new Set(touched)]);
   const repo = path.resolve(opt.repo);
   let head;
   try { head = git(repo, ['rev-parse', '--verify', `${opt.base}^{commit}`]).trim(); } catch (e) {
@@ -397,7 +412,9 @@ function check(dir, { terms, identity, names = [], hosts = [], allow = [], allow
     if (s === null) problems.push('DEVELOPER-HANDOFF.md has no "## Merge checklist" section');
     else if (!/^\s*\d+[.)]\s+\S/m.test(s)) problems.push('DEVELOPER-HANDOFF.md Merge checklist has no numbered item');
   }
+  for (const f of files) if (isStillNeededTestPath(f)) problems.push(`${STILL_NEEDED_REFUSAL}${f}`);
   if (exists(at('BUG-REPORT.md'))) {
+    if (!TRADE_OFFS_HEADING.test(text('BUG-REPORT.md'))) problems.push('BUG-REPORT.md has no "Trade-offs and behaviour changes" section');
     const n = text('BUG-REPORT.md').replace(/\n+$/, '').split('\n').length;
     if (n > 40) problems.push(`BUG-REPORT.md is ${n} lines (limit 40)`);
   }
@@ -708,6 +725,6 @@ function main(argv) {
   }
 }
 
-module.exports = { checkPost, POST_LIMIT, placeAll, refusalFor };
+module.exports = { isStillNeededTestPath, checkPost, POST_LIMIT, placeAll, refusalFor };
 
 if (require.main === module) main(process.argv.slice(2));
